@@ -2,7 +2,7 @@
    app.js — Entry point & Login view (router sederhana)
    ============================================================ */
 
-let selectedRole = 'karyawan';
+let selectedRole = 'hr';
 
 function renderLogin(errorMsg) {
   const app = document.getElementById('app');
@@ -19,7 +19,7 @@ function renderLogin(errorMsg) {
 
         <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-6">
           <div class="grid grid-cols-2 gap-2 mb-5 bg-slate-100 rounded-xl p-1">
-            <button id="role-karyawan" class="role-btn py-2 rounded-lg text-sm font-medium transition"></button>
+            <button id="role-hr" class="role-btn py-2 rounded-lg text-sm font-medium transition"></button>
             <button id="role-owner" class="role-btn py-2 rounded-lg text-sm font-medium transition"></button>
           </div>
 
@@ -38,24 +38,24 @@ function renderLogin(errorMsg) {
         </div>
 
         <div class="mt-4 text-center text-xs text-slate-400 space-y-0.5">
+          <p>Demo HR Admin: <span class="font-mono">hradmin / hr123</span></p>
           <p>Demo Owner: <span class="font-mono">owner / owner123</span></p>
-          <p>Demo Karyawan: <span class="font-mono">budi / budi123</span></p>
         </div>
       </div>
     </div>
   `;
 
   const paintRoleButtons = () => {
-    const kBtn = document.getElementById('role-karyawan');
+    const hBtn = document.getElementById('role-hr');
     const oBtn = document.getElementById('role-owner');
-    kBtn.textContent = 'Karyawan';
+    hBtn.textContent = 'HR Admin';
     oBtn.textContent = 'Owner / Admin';
-    kBtn.className = `role-btn py-2 rounded-lg text-sm font-medium transition ${selectedRole === 'karyawan' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`;
+    hBtn.className = `role-btn py-2 rounded-lg text-sm font-medium transition ${selectedRole === 'hr' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`;
     oBtn.className = `role-btn py-2 rounded-lg text-sm font-medium transition ${selectedRole === 'owner' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500'}`;
   };
   paintRoleButtons();
 
-  document.getElementById('role-karyawan').addEventListener('click', () => { selectedRole = 'karyawan'; paintRoleButtons(); });
+  document.getElementById('role-hr').addEventListener('click', () => { selectedRole = 'hr'; paintRoleButtons(); });
   document.getElementById('role-owner').addEventListener('click', () => { selectedRole = 'owner'; paintRoleButtons(); });
 
   document.getElementById('form-login').addEventListener('submit', (e) => {
@@ -66,19 +66,19 @@ function renderLogin(errorMsg) {
       renderLogin(result.message);
       return;
     }
-    routeToDashboard(result.user);
+    routeToDashboard(result.account);
   });
 }
 
-function routeToDashboard(user) {
-  if (user.role === 'owner') renderOwnerDashboard(user);
-  else renderEmployeeDashboard(user);
+function routeToDashboard(account) {
+  if (account.role === 'owner') renderOwnerDashboard(account);
+  else renderHrDashboard(account);
 }
 
 function init() {
   Storage.seed();
-  const user = Auth.currentUser();
-  if (user) routeToDashboard(user);
+  const account = Auth.currentAccount();
+  if (account) routeToDashboard(account);
   else renderLogin();
 }
 

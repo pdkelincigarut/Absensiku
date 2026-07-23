@@ -4,9 +4,13 @@
    tanpa backend. Bukan untuk produksi (password disimpan polos).
    ============================================================ */
 
-const DB_USERS = 'att_users';
+const DB_ACCOUNTS = 'att_accounts';
+const DB_EMPLOYEES = 'att_employees';
 const DB_ATTENDANCE = 'att_attendance';
 const DB_SESSION = 'att_session';
+
+const HARI_INDO = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', "Jumat", 'Sabtu'];
+const BULAN_INDO = ['Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni', 'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember'];
 
 function uid(prefix) {
   return prefix + '-' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
@@ -25,26 +29,51 @@ function nowTimeStr() {
 }
 
 function formatTanggalIndo(dateStr) {
-  const bulan = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
+  const bulanSingkat = ['Jan', 'Feb', 'Mar', 'Apr', 'Mei', 'Jun', 'Jul', 'Agu', 'Sep', 'Okt', 'Nov', 'Des'];
   const [y, m, d] = dateStr.split('-').map(Number);
-  return d + ' ' + bulan[m - 1] + ' ' + y;
+  return d + ' ' + bulanSingkat[m - 1] + ' ' + y;
+}
+
+function formatHariTanggalIndo(d) {
+  d = d || new Date();
+  return HARI_INDO[d.getDay()] + ', ' + d.getDate() + ' ' + BULAN_INDO[d.getMonth()] + ' ' + d.getFullYear();
+}
+
+function isBirthdayToday(birthDateStr) {
+  if (!birthDateStr) return false;
+  const [, m, d] = birthDateStr.split('-').map(Number);
+  const now = new Date();
+  return m === now.getMonth() + 1 && d === now.getDate();
 }
 
 const Storage = {
-  getUsers() {
-    return JSON.parse(localStorage.getItem(DB_USERS) || '[]');
+  getAccounts() {
+    return JSON.parse(localStorage.getItem(DB_ACCOUNTS) || '[]');
   },
-  saveUsers(users) {
-    localStorage.setItem(DB_USERS, JSON.stringify(users));
+  saveAccounts(accounts) {
+    localStorage.setItem(DB_ACCOUNTS, JSON.stringify(accounts));
   },
-  getUserById(id) {
-    return this.getUsers().find(u => u.id === id) || null;
+  getAccountById(id) {
+    return this.getAccounts().find(a => a.id === id) || null;
   },
-  upsertUser(user) {
-    const users = this.getUsers();
-    const idx = users.findIndex(u => u.id === user.id);
-    if (idx >= 0) users[idx] = user; else users.push(user);
-    this.saveUsers(users);
+
+  getEmployees() {
+    return JSON.parse(localStorage.getItem(DB_EMPLOYEES) || '[]');
+  },
+  saveEmployees(employees) {
+    localStorage.setItem(DB_EMPLOYEES, JSON.stringify(employees));
+  },
+  getEmployeeById(id) {
+    return this.getEmployees().find(e => e.id === id) || null;
+  },
+  upsertEmployee(employee) {
+    const employees = this.getEmployees();
+    const idx = employees.findIndex(e => e.id === employee.id);
+    if (idx >= 0) employees[idx] = employee; else employees.push(employee);
+    this.saveEmployees(employees);
+  },
+  deleteEmployee(id) {
+    this.saveEmployees(this.getEmployees().filter(e => e.id !== id));
   },
 
   getAttendance() {
@@ -53,12 +82,12 @@ const Storage = {
   saveAttendance(records) {
     localStorage.setItem(DB_ATTENDANCE, JSON.stringify(records));
   },
-  getRecordForDate(userId, dateStr) {
-    return this.getAttendance().find(r => r.userId === userId && r.date === dateStr) || null;
+  getRecordForDate(employeeId, dateStr) {
+    return this.getAttendance().find(r => r.employeeId === employeeId && r.date === dateStr) || null;
   },
   upsertAttendance(record) {
     const records = this.getAttendance();
-    const idx = records.findIndex(r => r.userId === record.userId && r.date === record.date);
+    const idx = records.findIndex(r => r.employeeId === record.employeeId && r.date === record.date);
     if (idx >= 0) records[idx] = { ...records[idx], ...record };
     else records.push(record);
     this.saveAttendance(records);
@@ -67,20 +96,26 @@ const Storage = {
   getSession() {
     return JSON.parse(localStorage.getItem(DB_SESSION) || 'null');
   },
-  setSession(userId) {
-    localStorage.setItem(DB_SESSION, JSON.stringify(userId));
+  setSession(accountId) {
+    localStorage.setItem(DB_SESSION, JSON.stringify(accountId));
   },
   clearSession() {
     localStorage.removeItem(DB_SESSION);
   },
 
   seed() {
-    if (this.getUsers().length === 0) {
-      this.saveUsers([
-        { id: 'u-owner', name: 'Admin Owner', username: 'owner', password: 'owner123', role: 'owner', createdAt: Date.now() },
-        { id: 'u-budi', name: 'Budi Santoso', username: 'budi', password: 'budi123', role: 'karyawan', dailyWage: 100000, createdAt: Date.now() },
-        { id: 'u-siti', name: 'Siti Aminah', username: 'siti', password: 'siti123', role: 'karyawan', dailyWage: 100000, createdAt: Date.now() },
-        { id: 'u-andi', name: 'Andi Wijaya', username: 'andi', password: 'andi123', role: 'karyawan', dailyWage: 120000, createdAt: Date.now() },
+    if (this.getAccounts().length === 0) {
+      this.saveAccounts([
+        { id: 'acc-hr', name: 'Rina (HR)', username: 'hradmin', password: 'hr123', role: 'hr', createdAt: Date.now() },
+        { id: 'acc-owner', name: 'Admin Owner', username: 'owner', password: 'owner123', role: 'owner', createdAt: Date.now() },
+      ]);
+    }
+    if (this.getEmployees().length === 0) {
+      const todayMd = todayStr().slice(5); // 'MM-DD' hari ini, untuk demo ulang tahun
+      this.saveEmployees([
+        { id: 'emp-budi', name: 'Budi Santoso', dailyWage: 100000, birthDate: `1995-${todayMd}`, active: true, createdAt: Date.now() },
+        { id: 'emp-siti', name: 'Siti Aminah', dailyWage: 100000, birthDate: '1998-03-12', active: true, createdAt: Date.now() },
+        { id: 'emp-andi', name: 'Andi Wijaya', dailyWage: 120000, birthDate: '1992-11-05', active: true, createdAt: Date.now() },
       ]);
     }
   }

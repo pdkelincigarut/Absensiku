@@ -4,24 +4,24 @@
 
 const Auth = {
   login(username, password, role) {
-    const user = Storage.getUsers().find(
-      u => u.username.toLowerCase() === username.trim().toLowerCase() && u.password === password
+    const account = Storage.getAccounts().find(
+      a => a.username.toLowerCase() === username.trim().toLowerCase() && a.password === password
     );
-    if (!user) return { ok: false, message: 'Username atau password salah.' };
-    if (user.role !== role) {
-      return { ok: false, message: `Akun ini terdaftar sebagai ${user.role === 'owner' ? 'Owner/Admin' : 'Karyawan'}, bukan ${role === 'owner' ? 'Owner/Admin' : 'Karyawan'}.` };
+    if (!account) return { ok: false, message: 'Username atau password salah.' };
+    if (account.role !== role) {
+      return { ok: false, message: `Akun ini terdaftar sebagai ${account.role === 'owner' ? 'Owner/Admin' : 'HR Admin'}, bukan ${role === 'owner' ? 'Owner/Admin' : 'HR Admin'}.` };
     }
-    Storage.setSession(user.id);
-    return { ok: true, user };
+    Storage.setSession(account.id);
+    return { ok: true, account };
   },
 
   logout() {
     Storage.clearSession();
   },
 
-  currentUser() {
+  currentAccount() {
     const id = Storage.getSession();
     if (!id) return null;
-    return Storage.getUserById(id);
+    return Storage.getAccountById(id);
   }
 };

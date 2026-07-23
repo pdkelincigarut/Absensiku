@@ -1,15 +1,16 @@
 /* ============================================================
    owner.js — Dashboard Owner/Admin
    Tabs: Monitoring | Data Karyawan | Riwayat | Laporan Gaji
+   Monitoring & Riwayat memakai komponen bersama dari checklist.js
    ============================================================ */
 
 const OwnerState = {
   tab: 'monitoring',
   monitorDate: todayStr(),
-  historyEmployee: 'all',
-  historyMonth: null, // 'YYYY-MM'
+  historyFilter: { employeeId: 'all', month: null },
   periodOffset: 0,
-  monitorTimer: null
+  monitorTimer: null,
+  account: null
 };
 
 function formatRupiah(n) {
@@ -32,7 +33,7 @@ function getPeriodByOffset(offset) {
   let year = now.getFullYear();
   let month = now.getMonth();
   const day = now.getDate();
-  let startMonth = day >= 26 ? month : month - 1;
+  let startMonth = day >= 27 ? month : month - 1;
   let startYear = year;
   if (startMonth < 0) { startMonth = 11; startYear--; }
 
@@ -40,10 +41,10 @@ function getPeriodByOffset(offset) {
   while (startMonth < 0) { startMonth += 12; startYear--; }
   while (startMonth > 11) { startMonth -= 12; startYear++; }
 
-  const start = new Date(startYear, startMonth, 26);
+  const start = new Date(startYear, startMonth, 27);
   let endMonth = startMonth + 1, endYear = startYear;
   if (endMonth > 11) { endMonth = 0; endYear++; }
-  const end = new Date(endYear, endMonth, 25);
+  const end = new Date(endYear, endMonth, 26);
   return { start, end, offset };
 }
 
@@ -59,17 +60,22 @@ function bumpStatus(counts, status) {
   else counts.alpa++;
 }
 
-function computePayrollRow(userId, period) {
+function computePayrollRow(employeeId, period, dailyWage) {
   const startS = dateToStr(period.start);
   const endS = dateToStr(period.end);
   const todayS = todayStr();
-  const counts = { hadir: 0, izin: 0, sakit: 0, alpa: 0 };
+  const counts = { hadir: 0, izin: 0, sakit: 0, alpa: 0, totalHoursPaid: 0, totalWage: 0 };
 
   let cursor = startS;
   while (cursor <= endS && cursor <= todayS) {
-    const rec = Storage.getRecordForDate(userId, cursor);
+    const rec = Storage.getRecordForDate(employeeId, cursor);
     if (rec) {
       bumpStatus(counts, rec.status);
+      if (rec.status === 'hadir') {
+        const paidHours = Math.min(rec.hoursWorked || 0, 8);
+        counts.totalHoursPaid += paidHours;
+        counts.totalWage += (paidHours / 8) * dailyWage;
+      }
     } else if (cursor < todayS) {
       counts.alpa++; // hari lampau tanpa data dianggap Alpa
     }
@@ -80,17 +86,21 @@ function computePayrollRow(userId, period) {
 
 /* ---------------- Shell & Tabs ---------------- */
 
-function renderOwnerDashboard(user) {
+function renderOwnerDashboard(account) {
+  OwnerState.account = account;
   const app = document.getElementById('app');
   app.innerHTML = `
     <div class="min-h-screen bg-slate-50">
       <header class="bg-white border-b border-slate-200 sticky top-0 z-10">
-        <div class="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between">
+        <div class="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between flex-wrap gap-2">
           <div>
             <p class="text-xs text-slate-400">Panel Owner/Admin</p>
-            <h1 class="text-lg font-bold text-slate-800">${escapeHtml(user.name)}</h1>
+            <h1 class="text-lg font-bold text-slate-800">${escapeHtml(account.name)}</h1>
           </div>
-          <button id="btn-logout" class="text-sm font-medium text-rose-600 hover:text-rose-700 px-3 py-1.5 rounded-lg hover:bg-rose-50 transition">Keluar</button>
+          <div class="flex items-center gap-4">
+            <p id="header-clock" class="text-sm"></p>
+            <button id="btn-logout" class="text-sm font-medium text-rose-600 hover:text-rose-700 px-3 py-1.5 rounded-lg hover:bg-rose-50 transition">Keluar</button>
+          </div>
         </div>
         <nav class="max-w-5xl mx-auto px-4 flex gap-1 overflow-x-auto no-scrollbar pb-2">
           ${tabButton('monitoring', 'Monitoring Hari Ini')}
@@ -100,13 +110,18 @@ function renderOwnerDashboard(user) {
         </nav>
       </header>
       <main class="max-w-5xl mx-auto px-4 py-6">
+        <div id="birthday-banner"></div>
         <div id="owner-content"></div>
       </main>
     </div>
     <div id="modal-root"></div>
   `;
 
+  startHeaderClock('header-clock');
+  renderBirthdayBanner(document.getElementById('birthday-banner'), Storage.getEmployees());
+
   document.getElementById('btn-logout').addEventListener('click', () => {
+    stopHeaderClock();
     clearInterval(OwnerState.monitorTimer);
     Auth.logout();
     renderLogin();
@@ -140,31 +155,11 @@ function renderOwnerTab() {
   else if (OwnerState.tab === 'laporan') renderLaporanTab();
 }
 
-/* ---------------- Modal helpers ---------------- */
-
-function openModal(innerHtml) {
-  const root = document.getElementById('modal-root');
-  root.innerHTML = `
-    <div class="fixed inset-0 bg-slate-900/50 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4" id="modal-overlay">
-      <div class="bg-white rounded-t-2xl sm:rounded-2xl w-full sm:max-w-md max-h-[90vh] overflow-y-auto shadow-xl">
-        ${innerHtml}
-      </div>
-    </div>
-  `;
-  document.getElementById('modal-overlay').addEventListener('click', (e) => {
-    if (e.target.id === 'modal-overlay') closeModal();
-  });
-}
-
-function closeModal() {
-  document.getElementById('modal-root').innerHTML = '';
-}
-
 /* ---------------- Tab: Monitoring Hari Ini ---------------- */
 
 function renderMonitoringTab() {
   const container = document.getElementById('owner-content');
-  const employees = Storage.getUsers().filter(u => u.role === 'karyawan');
+  const employees = Storage.getEmployees().filter(e => e.active);
 
   container.innerHTML = `
     <div class="flex flex-col sm:flex-row sm:items-center gap-3 mb-4">
@@ -175,126 +170,33 @@ function renderMonitoringTab() {
       <button id="btn-today" class="text-sm font-medium text-indigo-600 hover:underline w-fit">Hari ini</button>
       <span class="text-xs text-slate-400 sm:ml-auto">Diperbarui otomatis setiap 15 detik</span>
     </div>
-    <div id="monitor-list" class="space-y-2"></div>
+    <div id="monitor-list"></div>
   `;
+
+  const rerender = () => renderMonitoringList(document.getElementById('monitor-list'), employees, OwnerState.monitorDate, OwnerState.account.name);
 
   document.getElementById('monitor-date').addEventListener('change', (e) => {
     OwnerState.monitorDate = e.target.value;
-    renderMonitorList(employees);
+    rerender();
   });
   document.getElementById('btn-today').addEventListener('click', () => {
     OwnerState.monitorDate = todayStr();
     document.getElementById('monitor-date').value = OwnerState.monitorDate;
-    renderMonitorList(employees);
+    rerender();
   });
 
-  renderMonitorList(employees);
-  OwnerState.monitorTimer = setInterval(() => renderMonitorList(employees), 15000);
-}
-
-function renderMonitorList(employees) {
-  const list = document.getElementById('monitor-list');
-  if (!list) return;
-  const date = OwnerState.monitorDate;
-
-  if (employees.length === 0) {
-    list.innerHTML = `<p class="text-sm text-slate-400 text-center py-8">Belum ada data karyawan. Tambahkan di tab "Data Karyawan".</p>`;
-    return;
-  }
-
-  list.innerHTML = employees.map(emp => {
-    const rec = Storage.getRecordForDate(emp.id, date);
-    let statusHtml;
-    if (!rec) {
-      statusHtml = `<span class="text-xs font-medium px-2.5 py-1 rounded-full border bg-slate-100 text-slate-500 border-slate-200">Belum Absen</span>`;
-    } else {
-      statusHtml = `<span class="text-xs font-medium px-2.5 py-1 rounded-full border ${STATUS_BADGE_CLASS[rec.status]}">${STATUS_LABEL[rec.status]}${rec.checkInTime ? ' · ' + rec.checkInTime : ''}</span>`;
-    }
-    return `
-      <div class="flex items-center justify-between bg-white border border-slate-200 rounded-xl px-4 py-3">
-        <div>
-          <p class="text-sm font-medium text-slate-700">${escapeHtml(emp.name)}</p>
-          <p class="text-xs text-slate-400">@${escapeHtml(emp.username)}</p>
-        </div>
-        <div class="flex items-center gap-2">
-          ${statusHtml}
-          <button data-emp="${emp.id}" class="btn-set-status text-xs font-medium text-indigo-600 hover:underline">Ubah</button>
-        </div>
-      </div>
-    `;
-  }).join('');
-
-  list.querySelectorAll('.btn-set-status').forEach(btn => {
-    btn.addEventListener('click', () => openStatusModal(btn.dataset.emp, date));
-  });
-}
-
-function openStatusModal(userId, date) {
-  const emp = Storage.getUserById(userId);
-  const rec = Storage.getRecordForDate(userId, date);
-  const current = rec ? rec.status : 'hadir';
-  const currentTime = rec && rec.checkInTime ? rec.checkInTime : nowTimeStr();
-
-  openModal(`
-    <div class="p-5">
-      <h3 class="font-bold text-slate-800 mb-1">Ubah Status Absensi</h3>
-      <p class="text-sm text-slate-500 mb-4">${escapeHtml(emp.name)} &middot; ${formatTanggalIndo(date)}</p>
-      <form id="form-status" class="space-y-4">
-        <div class="grid grid-cols-2 gap-2">
-          ${['hadir', 'izin', 'sakit', 'alpa'].map(s => `
-            <label class="flex items-center gap-2 border rounded-lg px-3 py-2 cursor-pointer has-[:checked]:border-indigo-500 has-[:checked]:bg-indigo-50">
-              <input type="radio" name="status" value="${s}" ${current === s ? 'checked' : ''} class="accent-indigo-600" />
-              <span class="text-sm">${STATUS_LABEL[s]}</span>
-            </label>
-          `).join('')}
-        </div>
-        <div id="time-field">
-          <label class="text-sm text-slate-500 block mb-1">Jam Masuk</label>
-          <input type="time" name="checkInTime" value="${currentTime}" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
-        </div>
-        <div>
-          <label class="text-sm text-slate-500 block mb-1">Catatan (opsional)</label>
-          <textarea name="note" rows="2" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" placeholder="Contoh: Izin acara keluarga">${rec && rec.note ? escapeHtml(rec.note) : ''}</textarea>
-        </div>
-        <div class="flex gap-2 pt-2">
-          <button type="button" id="btn-cancel" class="flex-1 py-2.5 rounded-lg border border-slate-300 text-slate-600 font-medium text-sm">Batal</button>
-          <button type="submit" class="flex-1 py-2.5 rounded-lg bg-indigo-600 text-white font-medium text-sm hover:bg-indigo-700">Simpan</button>
-        </div>
-      </form>
-    </div>
-  `);
-
-  const toggleTimeField = () => {
-    const status = document.querySelector('input[name="status"]:checked').value;
-    document.getElementById('time-field').style.display = status === 'hadir' ? 'block' : 'none';
-  };
-  document.querySelectorAll('input[name="status"]').forEach(r => r.addEventListener('change', toggleTimeField));
-  toggleTimeField();
-
-  document.getElementById('btn-cancel').addEventListener('click', closeModal);
-  document.getElementById('form-status').addEventListener('submit', (e) => {
-    e.preventDefault();
-    const fd = new FormData(e.target);
-    const status = fd.get('status');
-    Storage.upsertAttendance({
-      id: (rec && rec.id) || uid('att'),
-      userId,
-      date,
-      status,
-      checkInTime: status === 'hadir' ? fd.get('checkInTime') : null,
-      note: fd.get('note') || '',
-      updatedAt: Date.now()
-    });
-    closeModal();
-    renderOwnerTab();
-  });
+  rerender();
+  OwnerState.monitorTimer = setInterval(() => {
+    const hasOpenPanel = document.querySelector('#monitor-list .panel-row:not(.hidden)');
+    if (!hasOpenPanel) rerender();
+  }, 15000);
 }
 
 /* ---------------- Tab: Data Karyawan ---------------- */
 
 function renderKaryawanTab() {
   const container = document.getElementById('owner-content');
-  const employees = Storage.getUsers().filter(u => u.role === 'karyawan');
+  const employees = Storage.getEmployees();
 
   container.innerHTML = `
     <div class="flex items-center justify-between mb-4">
@@ -307,8 +209,9 @@ function renderKaryawanTab() {
           <thead class="bg-slate-50 text-slate-500 text-left">
             <tr>
               <th class="px-4 py-2.5 font-medium">Nama</th>
-              <th class="px-4 py-2.5 font-medium">Username</th>
               <th class="px-4 py-2.5 font-medium">Upah Harian</th>
+              <th class="px-4 py-2.5 font-medium">Tanggal Lahir</th>
+              <th class="px-4 py-2.5 font-medium">Status</th>
               <th class="px-4 py-2.5 font-medium text-right">Aksi</th>
             </tr>
           </thead>
@@ -320,18 +223,24 @@ function renderKaryawanTab() {
 
   const tbody = document.getElementById('emp-tbody');
   if (employees.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="4" class="px-4 py-8 text-center text-slate-400">Belum ada karyawan.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="5" class="px-4 py-8 text-center text-slate-400">Belum ada karyawan.</td></tr>`;
   } else {
-    tbody.innerHTML = employees.map(emp => `
-      <tr>
-        <td class="px-4 py-2.5 text-slate-700">${escapeHtml(emp.name)}</td>
-        <td class="px-4 py-2.5 text-slate-500">@${escapeHtml(emp.username)}</td>
-        <td class="px-4 py-2.5 text-slate-700">${formatRupiah(emp.dailyWage)}</td>
-        <td class="px-4 py-2.5 text-right">
-          <button data-id="${emp.id}" class="btn-edit-emp text-indigo-600 hover:underline text-sm font-medium">Edit</button>
-        </td>
-      </tr>
-    `).join('');
+    tbody.innerHTML = employees.map(emp => {
+      const birthday = isBirthdayToday(emp.birthDate);
+      return `
+        <tr class="${birthday ? 'bg-amber-50' : ''}">
+          <td class="px-4 py-2.5 text-slate-700">${escapeHtml(emp.name)}${birthday ? ' 🎂' : ''}</td>
+          <td class="px-4 py-2.5 text-slate-700">${formatRupiah(emp.dailyWage)}</td>
+          <td class="px-4 py-2.5 text-slate-500">${emp.birthDate ? formatTanggalIndo(emp.birthDate) : '-'}</td>
+          <td class="px-4 py-2.5">
+            <span class="text-xs font-medium px-2.5 py-1 rounded-full border ${emp.active ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-500 border-slate-200'}">${emp.active ? 'Aktif' : 'Nonaktif'}</span>
+          </td>
+          <td class="px-4 py-2.5 text-right">
+            <button data-id="${emp.id}" class="btn-edit-emp text-indigo-600 hover:underline text-sm font-medium">Edit</button>
+          </td>
+        </tr>
+      `;
+    }).join('');
   }
 
   document.getElementById('btn-add-emp').addEventListener('click', () => openEmployeeModal(null));
@@ -340,9 +249,9 @@ function renderKaryawanTab() {
   });
 }
 
-function openEmployeeModal(userId) {
-  const isEdit = !!userId;
-  const emp = isEdit ? Storage.getUserById(userId) : null;
+function openEmployeeModal(employeeId) {
+  const isEdit = !!employeeId;
+  const emp = isEdit ? Storage.getEmployeeById(employeeId) : null;
 
   openModal(`
     <div class="p-5">
@@ -353,18 +262,17 @@ function openEmployeeModal(userId) {
           <input required name="name" value="${emp ? escapeHtml(emp.name) : ''}" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
         </div>
         <div>
-          <label class="text-sm text-slate-500 block mb-1">Username</label>
-          <input required name="username" value="${emp ? escapeHtml(emp.username) : ''}" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
-        </div>
-        <div>
-          <label class="text-sm text-slate-500 block mb-1">Password ${isEdit ? '(kosongkan jika tidak diubah)' : ''}</label>
-          <input type="text" name="password" ${isEdit ? '' : 'required'} class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
-        </div>
-        <div>
           <label class="text-sm text-slate-500 block mb-1">Upah Harian (Rp)</label>
           <input required type="number" min="0" step="1000" name="dailyWage" value="${emp ? emp.dailyWage : ''}" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
         </div>
-        <p id="form-error" class="text-sm text-rose-600 hidden"></p>
+        <div>
+          <label class="text-sm text-slate-500 block mb-1">Tanggal Lahir (opsional)</label>
+          <input type="date" name="birthDate" value="${emp && emp.birthDate ? emp.birthDate : ''}" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+        </div>
+        <label class="flex items-center gap-2 text-sm text-slate-600">
+          <input type="checkbox" name="active" ${!isEdit || emp.active ? 'checked' : ''} class="accent-indigo-600" />
+          Karyawan aktif
+        </label>
         <div class="flex gap-2 pt-2">
           <button type="button" id="btn-cancel" class="flex-1 py-2.5 rounded-lg border border-slate-300 text-slate-600 font-medium text-sm">Batal</button>
           <button type="submit" class="flex-1 py-2.5 rounded-lg bg-indigo-600 text-white font-medium text-sm hover:bg-indigo-700">Simpan</button>
@@ -379,8 +287,7 @@ function openEmployeeModal(userId) {
   if (isEdit) {
     document.getElementById('btn-delete-emp').addEventListener('click', () => {
       if (confirm(`Hapus karyawan "${emp.name}"? Riwayat absensinya akan tetap tersimpan.`)) {
-        const users = Storage.getUsers().filter(u => u.id !== userId);
-        Storage.saveUsers(users);
+        Storage.deleteEmployee(employeeId);
         closeModal();
         renderOwnerTab();
       }
@@ -390,26 +297,13 @@ function openEmployeeModal(userId) {
   document.getElementById('form-emp').addEventListener('submit', (e) => {
     e.preventDefault();
     const fd = new FormData(e.target);
-    const name = fd.get('name').trim();
-    const username = fd.get('username').trim();
-    const password = fd.get('password');
-    const dailyWage = Number(fd.get('dailyWage'));
-    const errorEl = document.getElementById('form-error');
+    const record = isEdit ? { ...emp } : { id: uid('emp'), createdAt: Date.now() };
+    record.name = fd.get('name').trim();
+    record.dailyWage = Number(fd.get('dailyWage'));
+    record.birthDate = fd.get('birthDate') || null;
+    record.active = fd.get('active') === 'on';
 
-    const dup = Storage.getUsers().find(u => u.username.toLowerCase() === username.toLowerCase() && u.id !== userId);
-    if (dup) {
-      errorEl.textContent = 'Username sudah digunakan, gunakan username lain.';
-      errorEl.classList.remove('hidden');
-      return;
-    }
-
-    const record = isEdit ? { ...emp } : { id: uid('u'), role: 'karyawan', createdAt: Date.now() };
-    record.name = name;
-    record.username = username;
-    record.dailyWage = dailyWage;
-    if (!isEdit || password) record.password = password;
-
-    Storage.upsertUser(record);
+    Storage.upsertEmployee(record);
     closeModal();
     renderOwnerTab();
   });
@@ -419,88 +313,16 @@ function openEmployeeModal(userId) {
 
 function renderRiwayatTab() {
   const container = document.getElementById('owner-content');
-  const employees = Storage.getUsers().filter(u => u.role === 'karyawan');
-  if (!OwnerState.historyMonth) {
-    const d = new Date();
-    OwnerState.historyMonth = d.getFullYear() + '-' + pad2(d.getMonth() + 1);
-  }
-
-  container.innerHTML = `
-    <div class="flex flex-col sm:flex-row gap-3 mb-4">
-      <div>
-        <label class="text-sm text-slate-500 block mb-1">Karyawan</label>
-        <select id="filter-emp" class="border border-slate-300 rounded-lg px-3 py-1.5 text-sm w-full sm:w-56">
-          <option value="all">Semua Karyawan</option>
-          ${employees.map(e => `<option value="${e.id}" ${OwnerState.historyEmployee === e.id ? 'selected' : ''}>${escapeHtml(e.name)}</option>`).join('')}
-        </select>
-      </div>
-      <div>
-        <label class="text-sm text-slate-500 block mb-1">Bulan</label>
-        <input type="month" id="filter-month" value="${OwnerState.historyMonth}" class="border border-slate-300 rounded-lg px-3 py-1.5 text-sm" />
-      </div>
-    </div>
-    <div class="bg-white border border-slate-200 rounded-xl overflow-hidden">
-      <div class="overflow-x-auto">
-        <table class="w-full text-sm">
-          <thead class="bg-slate-50 text-slate-500 text-left">
-            <tr>
-              <th class="px-4 py-2.5 font-medium">Tanggal</th>
-              <th class="px-4 py-2.5 font-medium">Karyawan</th>
-              <th class="px-4 py-2.5 font-medium">Status</th>
-              <th class="px-4 py-2.5 font-medium">Jam Masuk</th>
-              <th class="px-4 py-2.5 font-medium">Catatan</th>
-            </tr>
-          </thead>
-          <tbody id="hist-tbody" class="divide-y divide-slate-100"></tbody>
-        </table>
-      </div>
-    </div>
-  `;
-
-  document.getElementById('filter-emp').addEventListener('change', (e) => {
-    OwnerState.historyEmployee = e.target.value;
-    renderRiwayatTable(employees);
-  });
-  document.getElementById('filter-month').addEventListener('change', (e) => {
-    OwnerState.historyMonth = e.target.value;
-    renderRiwayatTable(employees);
-  });
-
-  renderRiwayatTable(employees);
-}
-
-function renderRiwayatTable(employees) {
-  const tbody = document.getElementById('hist-tbody');
-  const empMap = Object.fromEntries(employees.map(e => [e.id, e.name]));
-  const [y, m] = OwnerState.historyMonth.split('-');
-
-  let records = Storage.getAttendance().filter(r => r.date.startsWith(`${y}-${m}`));
-  if (OwnerState.historyEmployee !== 'all') {
-    records = records.filter(r => r.userId === OwnerState.historyEmployee);
-  }
-  records.sort((a, b) => b.date.localeCompare(a.date));
-
-  if (records.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="5" class="px-4 py-8 text-center text-slate-400">Tidak ada data pada periode ini.</td></tr>`;
-    return;
-  }
-
-  tbody.innerHTML = records.map(r => `
-    <tr>
-      <td class="px-4 py-2.5 text-slate-700">${formatTanggalIndo(r.date)}</td>
-      <td class="px-4 py-2.5 text-slate-700">${escapeHtml(empMap[r.userId] || '-')}</td>
-      <td class="px-4 py-2.5"><span class="text-xs font-medium px-2.5 py-1 rounded-full border ${STATUS_BADGE_CLASS[r.status]}">${STATUS_LABEL[r.status]}</span></td>
-      <td class="px-4 py-2.5 text-slate-500">${r.checkInTime || '-'}</td>
-      <td class="px-4 py-2.5 text-slate-500">${escapeHtml(r.note || '-')}</td>
-    </tr>
-  `).join('');
+  const employees = Storage.getEmployees().filter(e => e.active);
+  container.innerHTML = `<div id="history-wrap"></div>`;
+  renderHistoryTable(document.getElementById('history-wrap'), employees, OwnerState.historyFilter);
 }
 
 /* ---------------- Tab: Laporan Gaji ---------------- */
 
 function renderLaporanTab() {
   const container = document.getElementById('owner-content');
-  const employees = Storage.getUsers().filter(u => u.role === 'karyawan');
+  const employees = Storage.getEmployees().filter(e => e.active);
 
   const periodOptions = [];
   for (let i = 0; i >= -11; i--) periodOptions.push(getPeriodByOffset(i));
@@ -508,14 +330,14 @@ function renderLaporanTab() {
   container.innerHTML = `
     <div class="flex flex-col sm:flex-row sm:items-center gap-3 mb-4">
       <div class="flex-1">
-        <label class="text-sm text-slate-500 block mb-1">Periode Penggajian (26 &ndash; 25)</label>
+        <label class="text-sm text-slate-500 block mb-1">Periode Penggajian (27 &ndash; 26)</label>
         <select id="filter-period" class="border border-slate-300 rounded-lg px-3 py-1.5 text-sm w-full sm:w-96">
           ${periodOptions.map(p => `<option value="${p.offset}" ${OwnerState.periodOffset === p.offset ? 'selected' : ''}>${periodLabel(p)}</option>`).join('')}
         </select>
       </div>
       <button id="btn-export" class="px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 h-fit">Download CSV</button>
     </div>
-    <p class="text-xs text-slate-400 mb-4">Laporan dihitung otomatis dari data absensi. Hari tanpa keterangan pada periode berjalan dianggap Alpa.</p>
+    <p class="text-xs text-slate-400 mb-4">Laporan lengkap tersedia mulai tanggal 27 setiap bulan. Upah dihitung otomatis per jam kerja (1 hari penuh = 8 jam); jam lembur di atas 8 jam tercatat tapi tidak menambah upah otomatis. Hari tanpa keterangan pada periode berjalan dianggap Alpa.</p>
     <div class="bg-white border border-slate-200 rounded-xl overflow-hidden">
       <div class="overflow-x-auto">
         <table class="w-full text-sm">
@@ -526,6 +348,7 @@ function renderLaporanTab() {
               <th class="px-4 py-2.5 font-medium text-center">Izin</th>
               <th class="px-4 py-2.5 font-medium text-center">Sakit</th>
               <th class="px-4 py-2.5 font-medium text-center">Alpa</th>
+              <th class="px-4 py-2.5 font-medium text-center">Total Jam (dibayar)</th>
               <th class="px-4 py-2.5 font-medium text-right">Upah Harian</th>
               <th class="px-4 py-2.5 font-medium text-right">Total Gaji</th>
             </tr>
@@ -552,16 +375,15 @@ function renderPayrollTable(employees) {
   const tfoot = document.getElementById('payroll-tfoot');
 
   if (employees.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="7" class="px-4 py-8 text-center text-slate-400">Belum ada karyawan.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8" class="px-4 py-8 text-center text-slate-400">Belum ada karyawan aktif.</td></tr>`;
     tfoot.innerHTML = '';
     return;
   }
 
   let grandTotal = 0;
   tbody.innerHTML = employees.map(emp => {
-    const c = computePayrollRow(emp.id, period);
-    const total = c.hadir * emp.dailyWage;
-    grandTotal += total;
+    const c = computePayrollRow(emp.id, period, emp.dailyWage);
+    grandTotal += c.totalWage;
     return `
       <tr>
         <td class="px-4 py-2.5 text-slate-700">${escapeHtml(emp.name)}</td>
@@ -569,15 +391,16 @@ function renderPayrollTable(employees) {
         <td class="px-4 py-2.5 text-center text-amber-700">${c.izin}</td>
         <td class="px-4 py-2.5 text-center text-sky-700">${c.sakit}</td>
         <td class="px-4 py-2.5 text-center text-rose-700">${c.alpa}</td>
+        <td class="px-4 py-2.5 text-center text-slate-600">${c.totalHoursPaid} jam</td>
         <td class="px-4 py-2.5 text-right text-slate-500">${formatRupiah(emp.dailyWage)}</td>
-        <td class="px-4 py-2.5 text-right text-slate-800 font-semibold">${formatRupiah(total)}</td>
+        <td class="px-4 py-2.5 text-right text-slate-800 font-semibold">${formatRupiah(c.totalWage)}</td>
       </tr>
     `;
   }).join('');
 
   tfoot.innerHTML = `
     <tr>
-      <td class="px-4 py-3" colspan="6">Total Gaji Seluruh Karyawan</td>
+      <td class="px-4 py-3" colspan="7">Total Gaji Seluruh Karyawan</td>
       <td class="px-4 py-3 text-right text-indigo-700">${formatRupiah(grandTotal)}</td>
     </tr>
   `;
@@ -585,11 +408,10 @@ function renderPayrollTable(employees) {
 
 function exportPayrollCsv(employees) {
   const period = getPeriodByOffset(OwnerState.periodOffset);
-  const rows = [['Nama', 'Hadir', 'Izin', 'Sakit', 'Alpa', 'Upah Harian', 'Total Gaji']];
+  const rows = [['Nama', 'Hadir', 'Izin', 'Sakit', 'Alpa', 'Total Jam Dibayar', 'Upah Harian', 'Total Gaji']];
   employees.forEach(emp => {
-    const c = computePayrollRow(emp.id, period);
-    const total = c.hadir * emp.dailyWage;
-    rows.push([emp.name, c.hadir, c.izin, c.sakit, c.alpa, emp.dailyWage, total]);
+    const c = computePayrollRow(emp.id, period, emp.dailyWage);
+    rows.push([emp.name, c.hadir, c.izin, c.sakit, c.alpa, c.totalHoursPaid, emp.dailyWage, c.totalWage]);
   });
 
   const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
