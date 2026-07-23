@@ -58,10 +58,12 @@ function renderLogin(errorMsg) {
   document.getElementById('role-hr').addEventListener('click', () => { selectedRole = 'hr'; paintRoleButtons(); });
   document.getElementById('role-owner').addEventListener('click', () => { selectedRole = 'owner'; paintRoleButtons(); });
 
-  document.getElementById('form-login').addEventListener('submit', (e) => {
+  document.getElementById('form-login').addEventListener('submit', async (e) => {
     e.preventDefault();
     const fd = new FormData(e.target);
-    const result = Auth.login(fd.get('username'), fd.get('password'), selectedRole);
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+    submitBtn.disabled = true;
+    const result = await Auth.login(fd.get('username'), fd.get('password'), selectedRole);
     if (!result.ok) {
       renderLogin(result.message);
       return;
@@ -75,9 +77,8 @@ function routeToDashboard(account) {
   else renderHrDashboard(account);
 }
 
-function init() {
-  Storage.seed();
-  const account = Auth.currentAccount();
+async function init() {
+  const account = await Auth.currentAccount();
   if (account) routeToDashboard(account);
   else renderLogin();
 }

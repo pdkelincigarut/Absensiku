@@ -11,7 +11,7 @@ const HrState = {
   monitorTimer: null
 };
 
-function renderHrDashboard(account) {
+async function renderHrDashboard(account) {
   const app = document.getElementById('app');
   app.innerHTML = `
     <div class="min-h-screen bg-slate-50">
@@ -40,12 +40,11 @@ function renderHrDashboard(account) {
   `;
 
   startHeaderClock('header-clock');
-  renderBirthdayBanner(document.getElementById('birthday-banner'), Storage.getEmployees());
 
-  document.getElementById('btn-logout').addEventListener('click', () => {
+  document.getElementById('btn-logout').addEventListener('click', async () => {
     stopHeaderClock();
     clearInterval(HrState.monitorTimer);
-    Auth.logout();
+    await Auth.logout();
     renderLogin();
   });
 
@@ -64,7 +63,7 @@ function hrTabButton(id, label) {
   return `<button data-tab="${id}" class="hr-tab-btn whitespace-nowrap px-4 py-2 text-sm font-medium rounded-t-lg border-b-2 transition ${active ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-700'}">${label}</button>`;
 }
 
-function renderHrTab(account) {
+async function renderHrTab(account) {
   clearInterval(HrState.monitorTimer);
   document.querySelectorAll('.hr-tab-btn').forEach(btn => {
     const active = btn.dataset.tab === HrState.tab;
@@ -72,7 +71,16 @@ function renderHrTab(account) {
   });
 
   const container = document.getElementById('hr-content');
-  const employees = Storage.getEmployees();
+  container.innerHTML = `<p class="text-sm text-slate-400 text-center py-8">Memuat...</p>`;
+
+  let employees;
+  try {
+    employees = await Storage.getEmployees();
+  } catch (err) {
+    container.innerHTML = `<p class="text-sm text-rose-500 text-center py-8">Gagal memuat data: ${escapeHtml(err.message)}</p>`;
+    return;
+  }
+  renderBirthdayBanner(document.getElementById('birthday-banner'), employees);
 
   if (HrState.tab === 'monitoring') {
     container.innerHTML = `

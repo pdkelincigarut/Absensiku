@@ -1,0 +1,19 @@
+{
+  "name": "absensiku-backend",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Backend fondasi AbsensiKu (Express + SQLite)",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "seed": "node seed.js"
+  },
+  "engines": {
+    "node": ">=22.5.0"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "express": "^4.19.2",
+    "express-session": "^1.18.0"
+  }
+}

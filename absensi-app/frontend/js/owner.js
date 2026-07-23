@@ -1,7 +1,10 @@
 /* ============================================================
    owner.js — Dashboard Owner/Admin
    Tabs: Monitoring | Data Karyawan | Riwayat | Laporan Gaji
-   Monitoring & Riwayat memakai komponen bersama dari checklist.js
+   Monitoring & Riwayat memakai komponen bersama dari checklist.js.
+   Perhitungan gaji dilakukan di server (routes/payroll.js) — di
+   sini hanya kalkulasi tanggal murni (getPeriodByOffset/periodLabel)
+   yang dipakai untuk isi dropdown periode.
    ============================================================ */
 
 const OwnerState = {
@@ -19,13 +22,6 @@ function formatRupiah(n) {
 
 function dateToStr(d) {
   return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
-}
-
-function addDaysStr(dateStr, n) {
-  const [y, m, d] = dateStr.split('-').map(Number);
-  const dt = new Date(y, m - 1, d);
-  dt.setDate(dt.getDate() + n);
-  return dateToStr(dt);
 }
 
 function getPeriodByOffset(offset) {
@@ -53,40 +49,9 @@ function periodLabel(period) {
   return period.offset === 0 ? label + ' (Periode Berjalan)' : label;
 }
 
-function bumpStatus(counts, status) {
-  if (status === 'hadir') counts.hadir++;
-  else if (status === 'izin') counts.izin++;
-  else if (status === 'sakit') counts.sakit++;
-  else counts.alpa++;
-}
-
-function computePayrollRow(employeeId, period, dailyWage) {
-  const startS = dateToStr(period.start);
-  const endS = dateToStr(period.end);
-  const todayS = todayStr();
-  const counts = { hadir: 0, izin: 0, sakit: 0, alpa: 0, totalHoursPaid: 0, totalWage: 0 };
-
-  let cursor = startS;
-  while (cursor <= endS && cursor <= todayS) {
-    const rec = Storage.getRecordForDate(employeeId, cursor);
-    if (rec) {
-      bumpStatus(counts, rec.status);
-      if (rec.status === 'hadir') {
-        const paidHours = Math.min(rec.hoursWorked || 0, 8);
-        counts.totalHoursPaid += paidHours;
-        counts.totalWage += (paidHours / 8) * dailyWage;
-      }
-    } else if (cursor < todayS) {
-      counts.alpa++; // hari lampau tanpa data dianggap Alpa
-    }
-    cursor = addDaysStr(cursor, 1);
-  }
-  return counts;
-}
-
 /* ---------------- Shell & Tabs ---------------- */
 
-function renderOwnerDashboard(account) {
+async function renderOwnerDashboard(account) {
   OwnerState.account = account;
   const app = document.getElementById('app');
   app.innerHTML = `
@@ -118,12 +83,11 @@ function renderOwnerDashboard(account) {
   `;
 
   startHeaderClock('header-clock');
-  renderBirthdayBanner(document.getElementById('birthday-banner'), Storage.getEmployees());
 
-  document.getElementById('btn-logout').addEventListener('click', () => {
+  document.getElementById('btn-logout').addEventListener('click', async () => {
     stopHeaderClock();
     clearInterval(OwnerState.monitorTimer);
-    Auth.logout();
+    await Auth.logout();
     renderLogin();
   });
 
@@ -142,24 +106,32 @@ function tabButton(id, label) {
   return `<button data-tab="${id}" class="tab-btn whitespace-nowrap px-4 py-2 text-sm font-medium rounded-t-lg border-b-2 transition ${active ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-700'}">${label}</button>`;
 }
 
-function renderOwnerTab() {
+async function renderOwnerTab() {
   clearInterval(OwnerState.monitorTimer);
   document.querySelectorAll('.tab-btn').forEach(btn => {
     const active = btn.dataset.tab === OwnerState.tab;
     btn.className = `tab-btn whitespace-nowrap px-4 py-2 text-sm font-medium rounded-t-lg border-b-2 transition ${active ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`;
   });
 
-  if (OwnerState.tab === 'monitoring') renderMonitoringTab();
-  else if (OwnerState.tab === 'karyawan') renderKaryawanTab();
-  else if (OwnerState.tab === 'riwayat') renderRiwayatTab();
+  let employees;
+  try {
+    employees = await Storage.getEmployees();
+  } catch (err) {
+    document.getElementById('owner-content').innerHTML = `<p class="text-sm text-rose-500 text-center py-8">Gagal memuat data: ${escapeHtml(err.message)}</p>`;
+    return;
+  }
+  renderBirthdayBanner(document.getElementById('birthday-banner'), employees);
+
+  if (OwnerState.tab === 'monitoring') renderMonitoringTab(employees.filter(e => e.active));
+  else if (OwnerState.tab === 'karyawan') renderKaryawanTab(employees);
+  else if (OwnerState.tab === 'riwayat') renderRiwayatTab(employees.filter(e => e.active));
   else if (OwnerState.tab === 'laporan') renderLaporanTab();
 }
 
 /* ---------------- Tab: Monitoring Hari Ini ---------------- */
 
-function renderMonitoringTab() {
+function renderMonitoringTab(employees) {
   const container = document.getElementById('owner-content');
-  const employees = Storage.getEmployees().filter(e => e.active);
 
   container.innerHTML = `
     <div class="flex flex-col sm:flex-row sm:items-center gap-3 mb-4">
@@ -194,9 +166,8 @@ function renderMonitoringTab() {
 
 /* ---------------- Tab: Data Karyawan ---------------- */
 
-function renderKaryawanTab() {
+function renderKaryawanTab(employees) {
   const container = document.getElementById('owner-content');
-  const employees = Storage.getEmployees();
 
   container.innerHTML = `
     <div class="flex items-center justify-between mb-4">
@@ -249,9 +220,17 @@ function renderKaryawanTab() {
   });
 }
 
-function openEmployeeModal(employeeId) {
+async function openEmployeeModal(employeeId) {
   const isEdit = !!employeeId;
-  const emp = isEdit ? Storage.getEmployeeById(employeeId) : null;
+  let emp = null;
+  if (isEdit) {
+    try {
+      emp = await Storage.getEmployeeById(employeeId);
+    } catch (err) {
+      alert(`Gagal memuat data karyawan: ${err.message}`);
+      return;
+    }
+  }
 
   openModal(`
     <div class="p-5">
@@ -273,6 +252,7 @@ function openEmployeeModal(employeeId) {
           <input type="checkbox" name="active" ${!isEdit || emp.active ? 'checked' : ''} class="accent-indigo-600" />
           Karyawan aktif
         </label>
+        <p id="form-error" class="text-sm text-rose-600 hidden"></p>
         <div class="flex gap-2 pt-2">
           <button type="button" id="btn-cancel" class="flex-1 py-2.5 rounded-lg border border-slate-300 text-slate-600 font-medium text-sm">Batal</button>
           <button type="submit" class="flex-1 py-2.5 rounded-lg bg-indigo-600 text-white font-medium text-sm hover:bg-indigo-700">Simpan</button>
@@ -285,35 +265,46 @@ function openEmployeeModal(employeeId) {
   document.getElementById('btn-cancel').addEventListener('click', closeModal);
 
   if (isEdit) {
-    document.getElementById('btn-delete-emp').addEventListener('click', () => {
-      if (confirm(`Hapus karyawan "${emp.name}"? Riwayat absensinya akan tetap tersimpan.`)) {
-        Storage.deleteEmployee(employeeId);
+    document.getElementById('btn-delete-emp').addEventListener('click', async () => {
+      if (!confirm(`Hapus karyawan "${emp.name}"? Riwayat absensinya akan tetap tersimpan.`)) return;
+      try {
+        await Storage.deleteEmployee(employeeId);
         closeModal();
         renderOwnerTab();
+      } catch (err) {
+        alert(`Gagal menghapus: ${err.message}`);
       }
     });
   }
 
-  document.getElementById('form-emp').addEventListener('submit', (e) => {
+  document.getElementById('form-emp').addEventListener('submit', async (e) => {
     e.preventDefault();
     const fd = new FormData(e.target);
-    const record = isEdit ? { ...emp } : { id: uid('emp'), createdAt: Date.now() };
+    const record = isEdit ? { id: emp.id } : {};
     record.name = fd.get('name').trim();
     record.dailyWage = Number(fd.get('dailyWage'));
     record.birthDate = fd.get('birthDate') || null;
     record.active = fd.get('active') === 'on';
 
-    Storage.upsertEmployee(record);
-    closeModal();
-    renderOwnerTab();
+    const errorEl = document.getElementById('form-error');
+    const submitBtn = e.target.querySelector('button[type="submit"]');
+    submitBtn.disabled = true;
+    try {
+      await Storage.upsertEmployee(record);
+      closeModal();
+      renderOwnerTab();
+    } catch (err) {
+      errorEl.textContent = err.message;
+      errorEl.classList.remove('hidden');
+      submitBtn.disabled = false;
+    }
   });
 }
 
 /* ---------------- Tab: Riwayat Absensi ---------------- */
 
-function renderRiwayatTab() {
+function renderRiwayatTab(employees) {
   const container = document.getElementById('owner-content');
-  const employees = Storage.getEmployees().filter(e => e.active);
   container.innerHTML = `<div id="history-wrap"></div>`;
   renderHistoryTable(document.getElementById('history-wrap'), employees, OwnerState.historyFilter);
 }
@@ -322,7 +313,6 @@ function renderRiwayatTab() {
 
 function renderLaporanTab() {
   const container = document.getElementById('owner-content');
-  const employees = Storage.getEmployees().filter(e => e.active);
 
   const periodOptions = [];
   for (let i = 0; i >= -11; i--) periodOptions.push(getPeriodByOffset(i));
@@ -362,56 +352,65 @@ function renderLaporanTab() {
 
   document.getElementById('filter-period').addEventListener('change', (e) => {
     OwnerState.periodOffset = Number(e.target.value);
-    renderPayrollTable(employees);
+    renderPayrollTable();
   });
-  document.getElementById('btn-export').addEventListener('click', () => exportPayrollCsv(employees));
+  document.getElementById('btn-export').addEventListener('click', () => exportPayrollCsv());
 
-  renderPayrollTable(employees);
+  renderPayrollTable();
 }
 
-function renderPayrollTable(employees) {
-  const period = getPeriodByOffset(OwnerState.periodOffset);
+async function renderPayrollTable() {
   const tbody = document.getElementById('payroll-tbody');
   const tfoot = document.getElementById('payroll-tfoot');
+  tbody.innerHTML = `<tr><td colspan="8" class="px-4 py-8 text-center text-slate-400">Memuat...</td></tr>`;
+  tfoot.innerHTML = '';
 
-  if (employees.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="8" class="px-4 py-8 text-center text-slate-400">Belum ada karyawan aktif.</td></tr>`;
-    tfoot.innerHTML = '';
+  let data;
+  try {
+    data = await Storage.getPayroll(OwnerState.periodOffset);
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="8" class="px-4 py-8 text-center text-rose-500">Gagal memuat data: ${escapeHtml(err.message)}</td></tr>`;
     return;
   }
 
-  let grandTotal = 0;
-  tbody.innerHTML = employees.map(emp => {
-    const c = computePayrollRow(emp.id, period, emp.dailyWage);
-    grandTotal += c.totalWage;
-    return `
-      <tr>
-        <td class="px-4 py-2.5 text-slate-700">${escapeHtml(emp.name)}</td>
-        <td class="px-4 py-2.5 text-center text-emerald-700 font-medium">${c.hadir}</td>
-        <td class="px-4 py-2.5 text-center text-amber-700">${c.izin}</td>
-        <td class="px-4 py-2.5 text-center text-sky-700">${c.sakit}</td>
-        <td class="px-4 py-2.5 text-center text-rose-700">${c.alpa}</td>
-        <td class="px-4 py-2.5 text-center text-slate-600">${c.totalHoursPaid} jam</td>
-        <td class="px-4 py-2.5 text-right text-slate-500">${formatRupiah(emp.dailyWage)}</td>
-        <td class="px-4 py-2.5 text-right text-slate-800 font-semibold">${formatRupiah(c.totalWage)}</td>
-      </tr>
-    `;
-  }).join('');
+  if (data.rows.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="8" class="px-4 py-8 text-center text-slate-400">Belum ada karyawan aktif.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = data.rows.map(r => `
+    <tr>
+      <td class="px-4 py-2.5 text-slate-700">${escapeHtml(r.name)}</td>
+      <td class="px-4 py-2.5 text-center text-emerald-700 font-medium">${r.hadir}</td>
+      <td class="px-4 py-2.5 text-center text-amber-700">${r.izin}</td>
+      <td class="px-4 py-2.5 text-center text-sky-700">${r.sakit}</td>
+      <td class="px-4 py-2.5 text-center text-rose-700">${r.alpa}</td>
+      <td class="px-4 py-2.5 text-center text-slate-600">${r.totalHoursPaid} jam</td>
+      <td class="px-4 py-2.5 text-right text-slate-500">${formatRupiah(r.dailyWage)}</td>
+      <td class="px-4 py-2.5 text-right text-slate-800 font-semibold">${formatRupiah(r.totalWage)}</td>
+    </tr>
+  `).join('');
 
   tfoot.innerHTML = `
     <tr>
       <td class="px-4 py-3" colspan="7">Total Gaji Seluruh Karyawan</td>
-      <td class="px-4 py-3 text-right text-indigo-700">${formatRupiah(grandTotal)}</td>
+      <td class="px-4 py-3 text-right text-indigo-700">${formatRupiah(data.grandTotal)}</td>
     </tr>
   `;
 }
 
-function exportPayrollCsv(employees) {
-  const period = getPeriodByOffset(OwnerState.periodOffset);
+async function exportPayrollCsv() {
+  let data;
+  try {
+    data = await Storage.getPayroll(OwnerState.periodOffset);
+  } catch (err) {
+    alert(`Gagal export: ${err.message}`);
+    return;
+  }
+
   const rows = [['Nama', 'Hadir', 'Izin', 'Sakit', 'Alpa', 'Total Jam Dibayar', 'Upah Harian', 'Total Gaji']];
-  employees.forEach(emp => {
-    const c = computePayrollRow(emp.id, period, emp.dailyWage);
-    rows.push([emp.name, c.hadir, c.izin, c.sakit, c.alpa, c.totalHoursPaid, emp.dailyWage, c.totalWage]);
+  data.rows.forEach(r => {
+    rows.push([r.name, r.hadir, r.izin, r.sakit, r.alpa, r.totalHoursPaid, r.dailyWage, r.totalWage]);
   });
 
   const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
@@ -419,7 +418,7 @@ function exportPayrollCsv(employees) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `laporan-gaji_${dateToStr(period.start)}_${dateToStr(period.end)}.csv`;
+  a.download = `laporan-gaji_${data.period.start}_${data.period.end}.csv`;
   document.body.appendChild(a);
   a.click();
   document.body.removeChild(a);

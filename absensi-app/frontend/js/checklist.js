@@ -102,7 +102,7 @@ function formatKeterangan(rec) {
   return rec.note ? `${STATUS_LABEL[rec.status]} – ${escapeHtml(rec.note)}` : STATUS_LABEL[rec.status];
 }
 
-function renderMonitoringList(containerEl, employees, date, accountName) {
+async function renderMonitoringList(containerEl, employees, date, accountName) {
   if (!containerEl) return;
 
   if (employees.length === 0) {
@@ -110,7 +110,17 @@ function renderMonitoringList(containerEl, employees, date, accountName) {
     return;
   }
 
-  const unmarked = employees.filter(emp => !Storage.getRecordForDate(emp.id, date));
+  containerEl.innerHTML = `<p class="text-sm text-slate-400 text-center py-8">Memuat...</p>`;
+
+  let records;
+  try {
+    records = await Storage.getAttendanceForDate(date);
+  } catch (err) {
+    containerEl.innerHTML = `<p class="text-sm text-rose-500 text-center py-8">Gagal memuat data: ${escapeHtml(err.message)}</p>`;
+    return;
+  }
+  const recordByEmployee = new Map(records.map(r => [String(r.employeeId), r]));
+  const unmarked = employees.filter(emp => !recordByEmployee.has(String(emp.id)));
 
   containerEl.innerHTML = `
     <div class="bg-white border border-slate-200 rounded-xl overflow-hidden">
@@ -131,7 +141,7 @@ function renderMonitoringList(containerEl, employees, date, accountName) {
           </thead>
           <tbody>
             ${employees.map(emp => {
-              const rec = Storage.getRecordForDate(emp.id, date);
+              const rec = recordByEmployee.get(String(emp.id)) || null;
               const birthdayBadge = isBirthdayToday(emp.birthDate) ? ' <span title="Ulang tahun hari ini">🎂</span>' : '';
               const statusBadge = rec
                 ? `<span class="text-xs font-medium px-2.5 py-1 rounded-full border ${STATUS_BADGE_CLASS[rec.status]}">${STATUS_LABEL[rec.status]}</span>`
@@ -161,49 +171,46 @@ function renderMonitoringList(containerEl, employees, date, accountName) {
   containerEl.querySelectorAll('.row-checkbox').forEach(cb => {
     cb.addEventListener('click', () => {
       const empId = cb.dataset.emp;
+      const emp = employees.find(e => String(e.id) === empId);
+      const rec = recordByEmployee.get(empId) || null;
       const panelRow = containerEl.querySelector(`tr[data-panel-for="${empId}"]`);
       const wasHidden = panelRow.classList.contains('hidden');
 
       containerEl.querySelectorAll('.panel-row').forEach(r => r.classList.add('hidden'));
-      const rec = Storage.getRecordForDate(empId, date);
       cb.checked = !!rec; // checkbox mencerminkan status data, bukan toggle manual
 
       if (wasHidden) {
         panelRow.classList.remove('hidden');
         const panelContent = panelRow.querySelector('.panel-content');
-        renderAttendancePanel(panelContent, empId, date, accountName, () => renderMonitoringList(containerEl, employees, date, accountName));
+        renderAttendancePanel(panelContent, emp, rec, date, accountName, () => renderMonitoringList(containerEl, employees, date, accountName));
       }
     });
   });
 
   const headerCheckbox = document.getElementById('check-all-header');
   if (headerCheckbox && unmarked.length > 0) {
-    headerCheckbox.addEventListener('click', (e) => {
+    headerCheckbox.addEventListener('click', async (e) => {
       e.preventDefault();
       if (!confirm(`Tandai ${unmarked.length} karyawan yang belum absen sebagai Hadir (Full Day) dengan jam saat ini?`)) return;
-      const time = nowTimeStr();
-      unmarked.forEach(emp => {
-        Storage.upsertAttendance({
-          id: uid('att'),
+      headerCheckbox.disabled = true;
+      try {
+        await Promise.all(unmarked.map(emp => Storage.upsertAttendance({
           employeeId: emp.id,
           date,
           status: 'hadir',
           attendanceType: 'full',
           hoursWorked: 8,
-          checkInTime: time,
-          note: '',
-          markedBy: accountName,
-          updatedAt: Date.now()
-        });
-      });
+          note: ''
+        })));
+      } catch (err) {
+        alert(`Gagal menandai semua: ${err.message}`);
+      }
       renderMonitoringList(containerEl, employees, date, accountName);
     });
   }
 }
 
-function renderAttendancePanel(containerEl, employeeId, date, accountName, onSaved) {
-  const emp = Storage.getEmployeeById(employeeId);
-  const rec = Storage.getRecordForDate(employeeId, date);
+function renderAttendancePanel(containerEl, emp, rec, date, accountName, onSaved) {
   const currentStatus = rec ? rec.status : 'hadir';
   const currentType = (rec && rec.attendanceType) || 'full';
   const currentHours = rec && rec.hoursWorked != null ? rec.hoursWorked : '';
@@ -238,7 +245,7 @@ function renderAttendancePanel(containerEl, employeeId, date, accountName, onSav
             <input type="number" name="customHours" min="0.5" step="0.5" value="${currentType === 'custom' ? currentHours : ''}" placeholder="Contoh: 3 — boleh lebih dari 8 untuk lembur" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
           </div>
           <div class="bg-slate-100 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-500 max-w-sm">
-            Jam masuk otomatis diambil dari jam sistem saat disimpan: <span class="font-mono font-semibold text-slate-700">${nowTimeStr()}</span> (tidak bisa diketik manual)
+            Jam masuk diambil dari jam server saat disimpan (perkiraan sekarang <span class="font-mono font-semibold text-slate-700">${nowTimeStr()}</span>) — tidak bisa diketik manual.
           </div>
         </div>
 
@@ -275,13 +282,14 @@ function renderAttendancePanel(containerEl, employeeId, date, accountName, onSav
     containerEl.closest('.panel-row').classList.add('hidden');
   });
 
-  form.addEventListener('submit', (e) => {
+  form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const fd = new FormData(form);
     const status = fd.get('status');
     const errorEl = form.querySelector('.form-error');
+    errorEl.classList.add('hidden');
 
-    let attendanceType = null, hoursWorked = null, checkInTime = null;
+    let attendanceType = null, hoursWorked = null;
     if (status === 'hadir') {
       attendanceType = fd.get('attendanceType') || 'full';
       if (attendanceType === 'full') hoursWorked = 8;
@@ -294,22 +302,25 @@ function renderAttendancePanel(containerEl, employeeId, date, accountName, onSav
           return;
         }
       }
-      checkInTime = nowTimeStr();
     }
 
-    Storage.upsertAttendance({
-      id: (rec && rec.id) || uid('att'),
-      employeeId,
-      date,
-      status,
-      attendanceType,
-      hoursWorked,
-      checkInTime,
-      note: fd.get('note') || '',
-      markedBy: accountName,
-      updatedAt: Date.now()
-    });
-    if (onSaved) onSaved();
+    const submitBtn = form.querySelector('button[type="submit"]');
+    submitBtn.disabled = true;
+    try {
+      await Storage.upsertAttendance({
+        employeeId: emp.id,
+        date,
+        status,
+        attendanceType,
+        hoursWorked,
+        note: fd.get('note') || ''
+      });
+      if (onSaved) onSaved();
+    } catch (err) {
+      errorEl.textContent = err.message;
+      errorEl.classList.remove('hidden');
+      submitBtn.disabled = false;
+    }
   });
 }
 
@@ -329,7 +340,7 @@ function renderHistoryTable(containerEl, employees, state) {
         <label class="text-sm text-slate-500 block mb-1">Karyawan</label>
         <select id="filter-emp" class="border border-slate-300 rounded-lg px-3 py-1.5 text-sm w-full sm:w-56">
           <option value="all">Semua Karyawan</option>
-          ${employees.map(e => `<option value="${e.id}" ${state.employeeId === e.id ? 'selected' : ''}>${escapeHtml(e.name)}</option>`).join('')}
+          ${employees.map(e => `<option value="${e.id}" ${state.employeeId === String(e.id) ? 'selected' : ''}>${escapeHtml(e.name)}</option>`).join('')}
         </select>
       </div>
       <div>
@@ -359,27 +370,31 @@ function renderHistoryTable(containerEl, employees, state) {
 
   document.getElementById('filter-emp').addEventListener('change', (e) => {
     state.employeeId = e.target.value;
-    renderHistoryRows(employees, state);
+    renderHistoryRows(state);
   });
   document.getElementById('filter-month').addEventListener('change', (e) => {
     state.month = e.target.value;
-    renderHistoryRows(employees, state);
+    renderHistoryRows(state);
   });
 
-  renderHistoryRows(employees, state);
+  renderHistoryRows(state);
 }
 
-function renderHistoryRows(employees, state) {
+async function renderHistoryRows(state) {
   const tbody = document.getElementById('hist-tbody');
   if (!tbody) return;
-  const empMap = Object.fromEntries(employees.map(e => [e.id, e.name]));
-  const [y, m] = state.month.split('-');
+  tbody.innerHTML = `<tr><td colspan="7" class="px-4 py-8 text-center text-slate-400">Memuat...</td></tr>`;
 
-  let records = Storage.getAttendance().filter(r => r.date.startsWith(`${y}-${m}`));
-  if (state.employeeId !== 'all') {
-    records = records.filter(r => r.employeeId === state.employeeId);
+  let records;
+  try {
+    records = await Storage.getAttendanceHistory({
+      employeeId: state.employeeId === 'all' ? undefined : state.employeeId,
+      month: state.month
+    });
+  } catch (err) {
+    tbody.innerHTML = `<tr><td colspan="7" class="px-4 py-8 text-center text-rose-500">Gagal memuat data: ${escapeHtml(err.message)}</td></tr>`;
+    return;
   }
-  records.sort((a, b) => b.date.localeCompare(a.date));
 
   if (records.length === 0) {
     tbody.innerHTML = `<tr><td colspan="7" class="px-4 py-8 text-center text-slate-400">Tidak ada data pada periode ini.</td></tr>`;
@@ -389,7 +404,7 @@ function renderHistoryRows(employees, state) {
   tbody.innerHTML = records.map(r => `
     <tr>
       <td class="px-4 py-2.5 text-slate-700">${formatTanggalIndo(r.date)}</td>
-      <td class="px-4 py-2.5 text-slate-700">${escapeHtml(empMap[r.employeeId] || '-')}</td>
+      <td class="px-4 py-2.5 text-slate-700">${escapeHtml(r.employeeName || '-')}</td>
       <td class="px-4 py-2.5"><span class="text-xs font-medium px-2.5 py-1 rounded-full border ${STATUS_BADGE_CLASS[r.status]}">${STATUS_LABEL[r.status]}</span></td>
       <td class="px-4 py-2.5 text-slate-500">${r.attendanceType ? ATTENDANCE_TYPE_LABEL[r.attendanceType] : '-'}</td>
       <td class="px-4 py-2.5 text-slate-500">${r.hoursWorked != null ? r.hoursWorked + ' jam' : '-'}</td>
