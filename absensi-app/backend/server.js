@@ -7,17 +7,20 @@
 const path = require('path');
 const express = require('express');
 const session = require('express-session');
+const SqliteSessionStore = require('./sqliteSessionStore');
 
 require('./db'); // memastikan migrasi sudah jalan sebelum route dipakai
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+if (!process.env.SESSION_SECRET) {
+  console.warn('PERINGATAN: SESSION_SECRET belum di-set, pakai nilai default (tidak aman untuk produksi). Set environment variable SESSION_SECRET sebelum deploy ke server kantor.');
+}
+
 app.use(express.json());
 app.use(session({
-  // TODO: pindah ke store persisten (mis. connect-sqlite3) & secret dari env
-  // saat benar-benar deploy ke server kantor. Untuk tahap dev-only, restart
-  // server = semua sesi login hilang — ini yang diharapkan sekarang.
+  store: new SqliteSessionStore(), // persisten -- sesi login tetap ada walau server di-restart
   secret: process.env.SESSION_SECRET || 'absensiku-dev-secret-ganti-saat-deploy',
   resave: false,
   saveUninitialized: false,
