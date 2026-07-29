@@ -7,6 +7,7 @@
 const express = require('express');
 const db = require('../db');
 const { requireOwner } = require('../middleware/auth');
+const { computeLateMinutes, computeDeduction } = require('../lateCalculator');
 
 const router = express.Router();
 
@@ -54,6 +55,18 @@ function bumpStatus(counts, status) {
   else counts.alpa++;
 }
 
+function toLatePolicyJson(row) {
+  if (!row) return null;
+  return {
+    checkInLimit: row.check_in_limit,
+    thresholdMinutes: row.threshold_minutes,
+    deductionType: row.deduction_type,
+    deductionFlatAmount: row.deduction_flat_amount,
+    deductionPerMinuteAmount: row.deduction_per_minute_amount,
+    deductionPercentage: row.deduction_percentage
+  };
+}
+
 router.get('/', requireOwner, (req, res) => {
   const offset = Number(req.query.periodOffset || 0);
   const period = getPeriodByOffset(offset);
@@ -65,11 +78,12 @@ router.get('/', requireOwner, (req, res) => {
 
   const rows = employees.map(emp => {
     const records = db.prepare(
-      `SELECT date, status, hours_worked FROM attendance WHERE employee_id = ? AND date >= ? AND date <= ?`
+      `SELECT date, status, hours_worked, check_in_time FROM attendance WHERE employee_id = ? AND date >= ? AND date <= ?`
     ).all(emp.id, startS, endS);
     const byDate = new Map(records.map(r => [r.date, r]));
+    const policyRow = db.prepare('SELECT * FROM late_policies WHERE employee_id = ?').get(emp.id);
 
-    const counts = { hadir: 0, izin: 0, sakit: 0, alpa: 0, totalHoursPaid: 0, totalWage: 0 };
+    const counts = { hadir: 0, izin: 0, sakit: 0, alpa: 0, totalHoursPaid: 0, totalWage: 0, lateMinutesTotal: 0 };
     let cursor = startS;
     while (cursor <= endS && cursor <= todayS) {
       const rec = byDate.get(cursor);
@@ -79,6 +93,9 @@ router.get('/', requireOwner, (req, res) => {
           const paidHours = Math.min(rec.hours_worked || 0, 8);
           counts.totalHoursPaid += paidHours;
           counts.totalWage += (paidHours / 8) * emp.daily_wage;
+          if (policyRow) {
+            counts.lateMinutesTotal += computeLateMinutes(rec.check_in_time, policyRow.check_in_limit);
+          }
         }
       } else if (cursor < todayS) {
         counts.alpa++; // hari lampau tanpa data dianggap Alpa
@@ -86,11 +103,27 @@ router.get('/', requireOwner, (req, res) => {
       cursor = addDaysStr(cursor, 1);
     }
 
-    return { employeeId: emp.id, name: emp.name, dailyWage: emp.daily_wage, ...counts };
+    const latePolicy = toLatePolicyJson(policyRow);
+    const deductionAmount = policyRow
+      ? computeDeduction({
+          thresholdMinutes: policyRow.threshold_minutes,
+          deductionType: policyRow.deduction_type,
+          deductionFlatAmount: policyRow.deduction_flat_amount,
+          deductionPerMinuteAmount: policyRow.deduction_per_minute_amount,
+          deductionPercentage: policyRow.deduction_percentage
+        }, counts.lateMinutesTotal, counts.totalWage)
+      : 0;
+    const finalWage = Math.max(0, counts.totalWage - deductionAmount);
+
+    return {
+      employeeId: emp.id, name: emp.name, dailyWage: emp.daily_wage,
+      ...counts, latePolicy, deductionAmount, finalWage
+    };
   });
 
   const grandTotal = rows.reduce((sum, r) => sum + r.totalWage, 0);
-  res.json({ period: { start: startS, end: endS, offset }, rows, grandTotal });
+  const grandFinalTotal = rows.reduce((sum, r) => sum + r.finalWage, 0);
+  res.json({ period: { start: startS, end: endS, offset }, rows, grandTotal, grandFinalTotal });
 });
 
 module.exports = router;
