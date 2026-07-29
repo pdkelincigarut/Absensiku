@@ -93,5 +93,15 @@ const Storage = {
 
   async getPayroll(periodOffset) {
     return apiRequest('GET', `/api/payroll?periodOffset=${periodOffset}`);
+  },
+
+  async getLatePolicies() {
+    return apiRequest('GET', '/api/late-policies');
+  },
+  async saveLatePolicies(payload) {
+    return apiRequest('PUT', '/api/late-policies', payload);
+  },
+  async deleteLatePolicy(employeeId) {
+    return apiRequest('DELETE', `/api/late-policies/${employeeId}`);
   }
 };

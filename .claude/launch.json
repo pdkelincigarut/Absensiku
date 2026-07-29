@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "absensiku-backend",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["start", "--prefix", "absensi-app/backend"],
+      "port": 3000
+    }
+  ]
+}

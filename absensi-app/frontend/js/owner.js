@@ -70,6 +70,7 @@ async function renderOwnerDashboard(account) {
         <nav class="max-w-5xl mx-auto px-4 flex gap-1 overflow-x-auto no-scrollbar pb-2">
           ${tabButton('monitoring', 'Monitoring Hari Ini')}
           ${tabButton('karyawan', 'Data Karyawan')}
+          ${tabButton('keterlambatan', 'Aturan Keterlambatan')}
           ${tabButton('riwayat', 'Riwayat Absensi')}
           ${tabButton('laporan', 'Laporan Gaji')}
         </nav>
@@ -124,6 +125,7 @@ async function renderOwnerTab() {
 
   if (OwnerState.tab === 'monitoring') renderMonitoringTab(employees.filter(e => e.active));
   else if (OwnerState.tab === 'karyawan') renderKaryawanTab(employees);
+  else if (OwnerState.tab === 'keterlambatan') renderLatePolicyTab();
   else if (OwnerState.tab === 'riwayat') renderRiwayatTab(employees.filter(e => e.active));
   else if (OwnerState.tab === 'laporan') renderLaporanTab();
 }
@@ -327,7 +329,7 @@ function renderLaporanTab() {
       </div>
       <button id="btn-export" class="px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 h-fit">Download CSV</button>
     </div>
-    <p class="text-xs text-slate-400 mb-4">Laporan lengkap tersedia mulai tanggal 27 setiap bulan. Upah dihitung otomatis per jam kerja (1 hari penuh = 8 jam); jam lembur di atas 8 jam tercatat tapi tidak menambah upah otomatis. Hari tanpa keterangan pada periode berjalan dianggap Alpa.</p>
+    <p class="text-xs text-slate-400 mb-4">Laporan lengkap tersedia mulai tanggal 27 setiap bulan. Upah dihitung otomatis per jam kerja (1 hari penuh = 8 jam); jam lembur di atas 8 jam tercatat tapi tidak menambah upah otomatis. Hari tanpa keterangan pada periode berjalan dianggap Alpa. Potongan keterlambatan dihitung otomatis dari aturan di tab Aturan Keterlambatan; gaji bersih tidak pernah kurang dari nol.</p>
     <div class="bg-white border border-slate-200 rounded-xl overflow-hidden">
       <div class="overflow-x-auto">
         <table class="w-full text-sm">
@@ -341,6 +343,9 @@ function renderLaporanTab() {
               <th class="px-4 py-2.5 font-medium text-center">Total Jam (dibayar)</th>
               <th class="px-4 py-2.5 font-medium text-right">Upah Harian</th>
               <th class="px-4 py-2.5 font-medium text-right">Total Gaji</th>
+              <th class="px-4 py-2.5 font-medium text-center">Menit Telat</th>
+              <th class="px-4 py-2.5 font-medium text-right">Potongan</th>
+              <th class="px-4 py-2.5 font-medium text-right">Gaji Bersih</th>
             </tr>
           </thead>
           <tbody id="payroll-tbody" class="divide-y divide-slate-100"></tbody>
@@ -362,19 +367,19 @@ function renderLaporanTab() {
 async function renderPayrollTable() {
   const tbody = document.getElementById('payroll-tbody');
   const tfoot = document.getElementById('payroll-tfoot');
-  tbody.innerHTML = `<tr><td colspan="8" class="px-4 py-8 text-center text-slate-400">Memuat...</td></tr>`;
+  tbody.innerHTML = `<tr><td colspan="11" class="px-4 py-8 text-center text-slate-400">Memuat...</td></tr>`;
   tfoot.innerHTML = '';
 
   let data;
   try {
     data = await Storage.getPayroll(OwnerState.periodOffset);
   } catch (err) {
-    tbody.innerHTML = `<tr><td colspan="8" class="px-4 py-8 text-center text-rose-500">Gagal memuat data: ${escapeHtml(err.message)}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="11" class="px-4 py-8 text-center text-rose-500">Gagal memuat data: ${escapeHtml(err.message)}</td></tr>`;
     return;
   }
 
   if (data.rows.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="8" class="px-4 py-8 text-center text-slate-400">Belum ada karyawan aktif.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="11" class="px-4 py-8 text-center text-slate-400">Belum ada karyawan aktif.</td></tr>`;
     return;
   }
 
@@ -387,14 +392,22 @@ async function renderPayrollTable() {
       <td class="px-4 py-2.5 text-center text-rose-700">${r.alpa}</td>
       <td class="px-4 py-2.5 text-center text-slate-600">${r.totalHoursPaid} jam</td>
       <td class="px-4 py-2.5 text-right text-slate-500">${formatRupiah(r.dailyWage)}</td>
-      <td class="px-4 py-2.5 text-right text-slate-800 font-semibold">${formatRupiah(r.totalWage)}</td>
+      <td class="px-4 py-2.5 text-right text-slate-600">${formatRupiah(r.totalWage)}</td>
+      <td class="px-4 py-2.5 text-center text-slate-600">${r.latePolicy ? r.lateMinutesTotal + ' mnt' : '&mdash;'}</td>
+      <td class="px-4 py-2.5 text-right ${r.deductionAmount > 0 ? 'text-rose-600' : 'text-slate-400'}">${r.deductionAmount > 0 ? '-' + formatRupiah(r.deductionAmount) : '&mdash;'}</td>
+      <td class="px-4 py-2.5 text-right text-slate-800 font-semibold">${formatRupiah(r.finalWage)}</td>
     </tr>
   `).join('');
 
   tfoot.innerHTML = `
     <tr>
-      <td class="px-4 py-3" colspan="7">Total Gaji Seluruh Karyawan</td>
-      <td class="px-4 py-3 text-right text-indigo-700">${formatRupiah(data.grandTotal)}</td>
+      <td class="px-4 py-3 font-normal text-slate-500" colspan="7">Total Gaji Kotor (sebelum potongan)</td>
+      <td class="px-4 py-3 text-right text-slate-600">${formatRupiah(data.grandTotal)}</td>
+      <td colspan="3"></td>
+    </tr>
+    <tr>
+      <td class="px-4 py-3" colspan="10">Total Gaji Bersih Seluruh Karyawan</td>
+      <td class="px-4 py-3 text-right text-indigo-700">${formatRupiah(data.grandFinalTotal)}</td>
     </tr>
   `;
 }
@@ -408,9 +421,9 @@ async function exportPayrollCsv() {
     return;
   }
 
-  const rows = [['Nama', 'Hadir', 'Izin', 'Sakit', 'Alpa', 'Total Jam Dibayar', 'Upah Harian', 'Total Gaji']];
+  const rows = [['Nama', 'Hadir', 'Izin', 'Sakit', 'Alpa', 'Total Jam Dibayar', 'Upah Harian', 'Total Gaji', 'Menit Telat', 'Potongan', 'Gaji Bersih']];
   data.rows.forEach(r => {
-    rows.push([r.name, r.hadir, r.izin, r.sakit, r.alpa, r.totalHoursPaid, r.dailyWage, r.totalWage]);
+    rows.push([r.name, r.hadir, r.izin, r.sakit, r.alpa, r.totalHoursPaid, r.dailyWage, r.totalWage, r.lateMinutesTotal, r.deductionAmount, r.finalWage]);
   });
 
   const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
