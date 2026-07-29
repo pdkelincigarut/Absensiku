@@ -102,6 +102,53 @@ function formatKeterangan(rec) {
   return rec.note ? `${STATUS_LABEL[rec.status]} – ${escapeHtml(rec.note)}` : STATUS_LABEL[rec.status];
 }
 
+/* ---------------- Pengurutan tabel monitoring ---------------- */
+
+// Disimpan di tingkat modul, bukan di dalam fungsi render, supaya pilihan
+// urutan tidak hilang saat tabel di-render ulang otomatis tiap 15 detik.
+// Hanya satu dashboard aktif pada satu waktu, jadi satu status bersama
+// untuk HR dan Owner sudah cukup.
+const MonitorSortState = { key: 'no', dir: 'asc' };
+
+const MONITOR_SORT_KEYS = {
+  code: emp => emp.employeeCode || '',
+  name: emp => emp.name || '',
+  job: emp => (emp.job ? emp.job.name : ''),
+  organization: emp => (emp.organization ? emp.organization.name : '')
+};
+
+function sortEmployeesForMonitor(employees) {
+  const { key, dir } = MonitorSortState;
+  const rows = employees.slice();
+  if (key === 'no') return dir === 'asc' ? rows : rows.reverse();
+
+  const readValue = MONITOR_SORT_KEYS[key];
+  if (!readValue) return rows;
+
+  const factor = dir === 'asc' ? 1 : -1;
+  return rows.sort((a, b) => {
+    const av = readValue(a), bv = readValue(b);
+    // Nilai kosong selalu di akhir untuk kedua arah, supaya baris yang
+    // datanya belum lengkap tidak menumpuk di bagian atas tabel.
+    if (!av && !bv) return 0;
+    if (!av) return 1;
+    if (!bv) return -1;
+    return av.localeCompare(bv, 'id', { numeric: true, sensitivity: 'base' }) * factor;
+  });
+}
+
+function monitorSortableHeader(key, label, extraClass) {
+  const active = MonitorSortState.key === key;
+  const marker = active
+    ? `<span class="text-indigo-600">${MonitorSortState.dir === 'asc' ? '▲' : '▼'}</span>`
+    : `<span class="text-slate-300">⇅</span>`;
+  return `<th class="px-4 py-2.5 font-medium ${extraClass || ''}">
+      <button type="button" data-sort="${key}" class="monitor-sort flex items-center gap-1.5 hover:text-slate-700 transition">
+        <span>${label}</span>${marker}
+      </button>
+    </th>`;
+}
+
 async function renderMonitoringList(containerEl, employees, date, accountName) {
   if (!containerEl) return;
 
@@ -121,6 +168,7 @@ async function renderMonitoringList(containerEl, employees, date, accountName) {
   }
   const recordByEmployee = new Map(records.map(r => [String(r.employeeId), r]));
   const unmarked = employees.filter(emp => !recordByEmployee.has(String(emp.id)));
+  const sortedEmployees = sortEmployeesForMonitor(employees);
 
   containerEl.innerHTML = `
     <div class="bg-white border border-slate-200 rounded-xl overflow-hidden">
@@ -128,19 +176,23 @@ async function renderMonitoringList(containerEl, employees, date, accountName) {
         <table class="w-full text-sm">
           <thead class="bg-slate-50 text-slate-500 text-left">
             <tr>
-              <th class="px-4 py-2.5 font-medium">Nama Karyawan</th>
-              <th class="px-4 py-2.5 font-medium">Absen</th>
+              ${monitorSortableHeader('no', 'No', 'w-16')}
               <th class="px-4 py-2.5 font-medium">
                 <label class="flex items-center gap-2 cursor-pointer select-none">
                   <input type="checkbox" id="check-all-header" class="accent-indigo-600" ${unmarked.length === 0 ? 'disabled' : ''} />
                   Checklist All
                 </label>
               </th>
+              ${monitorSortableHeader('code', 'Employee ID')}
+              ${monitorSortableHeader('name', 'Nama Karyawan')}
+              ${monitorSortableHeader('job', 'Job')}
+              ${monitorSortableHeader('organization', 'Organization')}
+              <th class="px-4 py-2.5 font-medium">Absen</th>
               <th class="px-4 py-2.5 font-medium">Keterangan</th>
             </tr>
           </thead>
           <tbody>
-            ${employees.map(emp => {
+            ${sortedEmployees.map((emp, index) => {
               const rec = recordByEmployee.get(String(emp.id)) || null;
               const birthdayBadge = isBirthdayToday(emp.birthDate) ? ' <span title="Ulang tahun hari ini">🎂</span>' : '';
               const statusBadge = rec
@@ -148,15 +200,19 @@ async function renderMonitoringList(containerEl, employees, date, accountName) {
                 : `<span class="text-xs font-medium px-2.5 py-1 rounded-full border bg-slate-100 text-slate-500 border-slate-200">Belum Absen</span>`;
               return `
                 <tr class="border-t border-slate-100">
-                  <td class="px-4 py-2.5 text-slate-700">${escapeHtml(emp.name)}${birthdayBadge}</td>
-                  <td class="px-4 py-2.5">${statusBadge}</td>
+                  <td class="px-4 py-2.5 text-slate-400">${index + 1}</td>
                   <td class="px-4 py-2.5">
                     <input type="checkbox" data-emp="${emp.id}" class="row-checkbox accent-indigo-600" ${rec ? 'checked' : ''} />
                   </td>
+                  <td class="px-4 py-2.5 text-slate-500 font-mono text-xs">${escapeHtml(emp.employeeCode || '—')}</td>
+                  <td class="px-4 py-2.5 text-slate-700">${escapeHtml(emp.name)}${birthdayBadge}</td>
+                  <td class="px-4 py-2.5 text-slate-600">${emp.job ? escapeHtml(emp.job.name) : '—'}</td>
+                  <td class="px-4 py-2.5 text-slate-600">${emp.organization ? escapeHtml(emp.organization.name) : '—'}</td>
+                  <td class="px-4 py-2.5">${statusBadge}</td>
                   <td class="px-4 py-2.5 text-slate-500">${formatKeterangan(rec)}</td>
                 </tr>
                 <tr class="panel-row hidden" data-panel-for="${emp.id}">
-                  <td colspan="4" class="px-4 pb-4 bg-slate-50">
+                  <td colspan="8" class="px-4 pb-4 bg-slate-50">
                     <div class="panel-content" data-panel-content="${emp.id}"></div>
                   </td>
                 </tr>
@@ -167,6 +223,19 @@ async function renderMonitoringList(containerEl, employees, date, accountName) {
       </div>
     </div>
   `;
+
+  containerEl.querySelectorAll('.monitor-sort').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const key = btn.dataset.sort;
+      if (MonitorSortState.key === key) {
+        MonitorSortState.dir = MonitorSortState.dir === 'asc' ? 'desc' : 'asc';
+      } else {
+        MonitorSortState.key = key;
+        MonitorSortState.dir = 'asc';
+      }
+      renderMonitoringList(containerEl, employees, date, accountName);
+    });
+  });
 
   containerEl.querySelectorAll('.row-checkbox').forEach(cb => {
     cb.addEventListener('click', () => {

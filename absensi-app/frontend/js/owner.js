@@ -71,6 +71,7 @@ async function renderOwnerDashboard(account) {
           ${tabButton('monitoring', 'Monitoring Hari Ini')}
           ${tabButton('karyawan', 'Data Karyawan')}
           ${tabButton('keterlambatan', 'Aturan Keterlambatan')}
+          ${tabButton('lookup', 'Jabatan &amp; Divisi')}
           ${tabButton('riwayat', 'Riwayat Absensi')}
           ${tabButton('laporan', 'Laporan Gaji')}
         </nav>
@@ -126,6 +127,7 @@ async function renderOwnerTab() {
   if (OwnerState.tab === 'monitoring') renderMonitoringTab(employees.filter(e => e.active));
   else if (OwnerState.tab === 'karyawan') renderKaryawanTab(employees);
   else if (OwnerState.tab === 'keterlambatan') renderLatePolicyTab();
+  else if (OwnerState.tab === 'lookup') renderLookupsTab();
   else if (OwnerState.tab === 'riwayat') renderRiwayatTab(employees.filter(e => e.active));
   else if (OwnerState.tab === 'laporan') renderLaporanTab();
 }
@@ -181,6 +183,7 @@ function renderKaryawanTab(employees) {
         <table class="w-full text-sm">
           <thead class="bg-slate-50 text-slate-500 text-left">
             <tr>
+              <th class="px-4 py-2.5 font-medium">Employee ID</th>
               <th class="px-4 py-2.5 font-medium">Nama</th>
               <th class="px-4 py-2.5 font-medium">Upah Harian</th>
               <th class="px-4 py-2.5 font-medium">Tanggal Lahir</th>
@@ -196,12 +199,13 @@ function renderKaryawanTab(employees) {
 
   const tbody = document.getElementById('emp-tbody');
   if (employees.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="5" class="px-4 py-8 text-center text-slate-400">Belum ada karyawan.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6" class="px-4 py-8 text-center text-slate-400">Belum ada karyawan.</td></tr>`;
   } else {
     tbody.innerHTML = employees.map(emp => {
       const birthday = isBirthdayToday(emp.birthDate);
       return `
         <tr class="${birthday ? 'bg-amber-50' : ''}">
+          <td class="px-4 py-2.5 text-slate-500 font-mono text-xs">${escapeHtml(emp.employeeCode || '—')}</td>
           <td class="px-4 py-2.5 text-slate-700">${escapeHtml(emp.name)}${birthday ? ' 🎂' : ''}</td>
           <td class="px-4 py-2.5 text-slate-700">${formatRupiah(emp.dailyWage)}</td>
           <td class="px-4 py-2.5 text-slate-500">${emp.birthDate ? formatTanggalIndo(emp.birthDate) : '-'}</td>
@@ -224,23 +228,49 @@ function renderKaryawanTab(employees) {
 
 async function openEmployeeModal(employeeId) {
   const isEdit = !!employeeId;
-  let emp = null;
-  if (isEdit) {
-    try {
-      emp = await Storage.getEmployeeById(employeeId);
-    } catch (err) {
-      alert(`Gagal memuat data karyawan: ${err.message}`);
-      return;
-    }
+  let emp = null, jobs = [], organizations = [];
+  try {
+    [jobs, organizations] = await Promise.all([Storage.getJobs(), Storage.getOrganizations()]);
+    if (isEdit) emp = await Storage.getEmployeeById(employeeId);
+  } catch (err) {
+    alert(`Gagal memuat data: ${err.message}`);
+    return;
   }
+
+  const lookupOptions = (list, selectedId) => [
+    `<option value="">— Belum diatur —</option>`,
+    ...list.map(row => `<option value="${row.id}" ${selectedId === row.id ? 'selected' : ''}>${escapeHtml(row.name)}</option>`)
+  ].join('');
+
+  const emptyHint = list => list.length === 0
+    ? `<p class="text-xs text-amber-600 mt-1">Daftarnya masih kosong — isi dulu di tab Jabatan &amp; Divisi.</p>`
+    : '';
 
   openModal(`
     <div class="p-5">
       <h3 class="font-bold text-slate-800 mb-4">${isEdit ? 'Edit Karyawan' : 'Tambah Karyawan'}</h3>
       <form id="form-emp" class="space-y-3">
         <div>
+          <label class="text-sm text-slate-500 block mb-1">Employee ID</label>
+          <input required name="employeeCode" value="${emp ? escapeHtml(emp.employeeCode || '') : ''}" placeholder="TDI-006" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+        </div>
+        <div>
           <label class="text-sm text-slate-500 block mb-1">Nama Lengkap</label>
           <input required name="name" value="${emp ? escapeHtml(emp.name) : ''}" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+        </div>
+        <div>
+          <label class="text-sm text-slate-500 block mb-1">Jabatan</label>
+          <select name="jobId" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
+            ${lookupOptions(jobs, emp && emp.job ? emp.job.id : null)}
+          </select>
+          ${emptyHint(jobs)}
+        </div>
+        <div>
+          <label class="text-sm text-slate-500 block mb-1">Divisi</label>
+          <select name="organizationId" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm bg-white">
+            ${lookupOptions(organizations, emp && emp.organization ? emp.organization.id : null)}
+          </select>
+          ${emptyHint(organizations)}
         </div>
         <div>
           <label class="text-sm text-slate-500 block mb-1">Upah Harian (Rp)</label>
@@ -283,8 +313,11 @@ async function openEmployeeModal(employeeId) {
     e.preventDefault();
     const fd = new FormData(e.target);
     const record = isEdit ? { id: emp.id } : {};
+    record.employeeCode = fd.get('employeeCode').trim();
     record.name = fd.get('name').trim();
     record.dailyWage = Number(fd.get('dailyWage'));
+    record.jobId = fd.get('jobId') ? Number(fd.get('jobId')) : null;
+    record.organizationId = fd.get('organizationId') ? Number(fd.get('organizationId')) : null;
     record.birthDate = fd.get('birthDate') || null;
     record.active = fd.get('active') === 'on';
 

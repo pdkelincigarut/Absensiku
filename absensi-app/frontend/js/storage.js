@@ -103,5 +103,27 @@ const Storage = {
   },
   async deleteLatePolicy(employeeId) {
     return apiRequest('DELETE', `/api/late-policies/${employeeId}`);
+  },
+
+  async getJobs() {
+    return apiRequest('GET', '/api/jobs');
+  },
+  async saveJob(record) {
+    if (record.id) return apiRequest('PUT', `/api/jobs/${record.id}`, { name: record.name });
+    return apiRequest('POST', '/api/jobs', { name: record.name });
+  },
+  async deleteJob(id) {
+    return apiRequest('DELETE', `/api/jobs/${id}`);
+  },
+
+  async getOrganizations() {
+    return apiRequest('GET', '/api/organizations');
+  },
+  async saveOrganization(record) {
+    if (record.id) return apiRequest('PUT', `/api/organizations/${record.id}`, { name: record.name });
+    return apiRequest('POST', '/api/organizations', { name: record.name });
+  },
+  async deleteOrganization(id) {
+    return apiRequest('DELETE', `/api/organizations/${id}`);
   }
 };
