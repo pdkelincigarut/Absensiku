@@ -11,7 +11,8 @@ const { DatabaseSync } = require('node:sqlite'); // bawaan Node.js >=22.5, tanpa
 const dataDir = path.join(__dirname, 'data');
 if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
 
-const db = new DatabaseSync(path.join(dataDir, 'absensiku.db'));
+const dbFile = process.env.DB_FILE || path.join(dataDir, 'absensiku.db');
+const db = new DatabaseSync(dbFile);
 db.exec('PRAGMA journal_mode = WAL');
 // foreign_keys sengaja TIDAK diaktifkan: menghapus karyawan harus tetap
 // menyisakan riwayat absensinya (employee_id yatim), sama seperti perilaku
