@@ -16,7 +16,9 @@ function useTempDb() {
 
 function mountWithSession(mountPath, router, session) {
   const app = express();
-  app.use(express.json());
+  app.use(express.json({ limit: '2mb' })); // samakan dengan server.js supaya
+  // validasi ukuran foto yang diuji benar-benar berasal dari route, bukan
+  // dari penolakan body-parser lebih dulu
   app.use((req, res, next) => { req.session = session; next(); });
   app.use(mountPath, router);
   return app;

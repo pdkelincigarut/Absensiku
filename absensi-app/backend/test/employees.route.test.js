@@ -81,3 +81,99 @@ test('GET membawa nama jabatan dan divisi hasil join', async () => {
   assert.equal(found.job.name, 'Supervisor Accounting');
   assert.equal(found.organization.name, 'Finance & Accounting');
 });
+
+/* ---------------- Foto karyawan ---------------- */
+
+const PNG_1PX = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==';
+
+function putEmployee(id, body) {
+  return fetch(`http://localhost:${port}/api/employees/${id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+}
+
+test('POST dengan foto menyimpannya dan hasPhoto jadi true', async () => {
+  const res = await createEmployee({ name: 'Berfoto', dailyWage: 100000, employeeCode: 'FOTO-001', photo: PNG_1PX });
+  assert.equal(res.status, 201);
+  const created = await res.json();
+  assert.equal(created.hasPhoto, true);
+  assert.ok(created.photoVersion);
+  assert.equal(created.photo, undefined, 'BLOB foto tidak boleh ikut di respons');
+});
+
+test('GET /:id/photo mengembalikan gambar dengan Content-Type yang benar', async () => {
+  const created = await (await createEmployee({ name: 'Ambil Foto', dailyWage: 100000, employeeCode: 'FOTO-002', photo: PNG_1PX })).json();
+  const res = await fetch(`http://localhost:${port}/api/employees/${created.id}/photo`);
+  assert.equal(res.status, 200);
+  assert.equal(res.headers.get('content-type'), 'image/png');
+  assert.ok((await res.arrayBuffer()).byteLength > 0);
+});
+
+test('GET /:id/photo membalas 404 untuk karyawan tanpa foto', async () => {
+  const created = await (await createEmployee({ name: 'Tanpa Foto', dailyWage: 100000, employeeCode: 'FOTO-003' })).json();
+  assert.equal(created.hasPhoto, false);
+  const res = await fetch(`http://localhost:${port}/api/employees/${created.id}/photo`);
+  assert.equal(res.status, 404);
+});
+
+test('POST menolak format gambar yang tidak didukung', async () => {
+  const res = await createEmployee({
+    name: 'Gif Ditolak', dailyWage: 100000, employeeCode: 'FOTO-004',
+    photo: 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw=='
+  });
+  assert.equal(res.status, 400);
+  assert.match((await res.json()).error, /JPG, PNG, atau WebP/);
+});
+
+test('POST menolak data URL yang bentuknya tidak dikenali', async () => {
+  const res = await createEmployee({ name: 'Rusak', dailyWage: 100000, employeeCode: 'FOTO-005', photo: 'bukan-data-url' });
+  assert.equal(res.status, 400);
+});
+
+test('POST menolak foto yang melebihi 500 KB', async () => {
+  const bigBase64 = Buffer.alloc(600 * 1024, 1).toString('base64');
+  const res = await createEmployee({
+    name: 'Kebesaran', dailyWage: 100000, employeeCode: 'FOTO-006',
+    photo: `data:image/jpeg;base64,${bigBase64}`
+  });
+  assert.equal(res.status, 400);
+  assert.match((await res.json()).error, /maksimal 500 KB/);
+});
+
+test('PUT tanpa menyertakan field photo tidak menghapus foto yang sudah ada', async () => {
+  const created = await (await createEmployee({ name: 'Foto Bertahan', dailyWage: 100000, employeeCode: 'FOTO-007', photo: PNG_1PX })).json();
+
+  const res = await putEmployee(created.id, { name: 'Foto Bertahan Diubah', dailyWage: 110000, employeeCode: 'FOTO-007' });
+  assert.equal(res.status, 200);
+  const updated = await res.json();
+  assert.equal(updated.name, 'Foto Bertahan Diubah');
+  assert.equal(updated.hasPhoto, true, 'foto seharusnya tetap ada');
+});
+
+test('PUT dengan photo null menghapus foto', async () => {
+  const created = await (await createEmployee({ name: 'Foto Dihapus', dailyWage: 100000, employeeCode: 'FOTO-008', photo: PNG_1PX })).json();
+
+  const res = await putEmployee(created.id, { name: 'Foto Dihapus', dailyWage: 100000, employeeCode: 'FOTO-008', photo: null });
+  assert.equal(res.status, 200);
+  assert.equal((await res.json()).hasPhoto, false);
+
+  const photoRes = await fetch(`http://localhost:${port}/api/employees/${created.id}/photo`);
+  assert.equal(photoRes.status, 404);
+});
+
+test('PUT dengan foto baru menggantikan foto lama dan memperbarui versinya', async () => {
+  const created = await (await createEmployee({ name: 'Foto Diganti', dailyWage: 100000, employeeCode: 'FOTO-009', photo: PNG_1PX })).json();
+  const firstVersion = created.photoVersion;
+
+  await new Promise(resolve => setTimeout(resolve, 5));
+  const res = await putEmployee(created.id, {
+    name: 'Foto Diganti', dailyWage: 100000, employeeCode: 'FOTO-009',
+    photo: 'data:image/jpeg;base64,' + Buffer.alloc(64, 7).toString('base64')
+  });
+  assert.equal(res.status, 200);
+  const updated = await res.json();
+  assert.equal(updated.hasPhoto, true);
+  assert.ok(updated.photoVersion > firstVersion, 'photoVersion harus naik supaya cache browser tidak menahan foto lama');
+});
