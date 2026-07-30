@@ -18,7 +18,10 @@ if (!process.env.SESSION_SECRET) {
   console.warn('PERINGATAN: SESSION_SECRET belum di-set, pakai nilai default (tidak aman untuk produksi). Set environment variable SESSION_SECRET sebelum deploy ke server kantor.');
 }
 
-app.use(express.json());
+// 2mb: foto karyawan dikirim sebagai data URL base64 di body JSON. Server
+// tetap memvalidasi ukuran hasil decode sendiri di routes/employees.js —
+// batas ini cuma memberi ruang, bukan pengaman.
+app.use(express.json({ limit: '2mb' }));
 app.use(session({
   store: new SqliteSessionStore(), // persisten -- sesi login tetap ada walau server di-restart
   secret: process.env.SESSION_SECRET || 'absensiku-dev-secret-ganti-saat-deploy',
