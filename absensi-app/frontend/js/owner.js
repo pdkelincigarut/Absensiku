@@ -125,7 +125,7 @@ async function renderOwnerTab() {
   renderBirthdayBanner(document.getElementById('birthday-banner'), employees);
 
   if (OwnerState.tab === 'monitoring') renderMonitoringTab(employees.filter(e => e.active));
-  else if (OwnerState.tab === 'karyawan') renderKaryawanTab(employees);
+  else if (OwnerState.tab === 'karyawan') renderEmployeeListTab(employees);
   else if (OwnerState.tab === 'keterlambatan') renderLatePolicyTab();
   else if (OwnerState.tab === 'lookup') renderLookupsTab();
   else if (OwnerState.tab === 'riwayat') renderRiwayatTab(employees.filter(e => e.active));
@@ -168,61 +168,32 @@ function renderMonitoringTab(employees) {
   }, 15000);
 }
 
-/* ---------------- Tab: Data Karyawan ---------------- */
+/* ---------------- Tab: Data Karyawan ----------------
+   Tabelnya sendiri ada di employeeList.js (renderEmployeeListTab);
+   di sini tinggal modal tambah/ubah karyawannya.
+   ---------------------------------------------------- */
 
-function renderKaryawanTab(employees) {
-  const container = document.getElementById('owner-content');
-
-  container.innerHTML = `
-    <div class="flex items-center justify-between mb-4">
-      <h2 class="font-semibold text-slate-700">${employees.length} Karyawan</h2>
-      <button id="btn-add-emp" class="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700">+ Tambah Karyawan</button>
-    </div>
-    <div class="bg-white border border-slate-200 rounded-xl overflow-hidden">
-      <div class="overflow-x-auto">
-        <table class="w-full text-sm">
-          <thead class="bg-slate-50 text-slate-500 text-left">
-            <tr>
-              <th class="px-4 py-2.5 font-medium">Employee ID</th>
-              <th class="px-4 py-2.5 font-medium">Nama</th>
-              <th class="px-4 py-2.5 font-medium">Upah Harian</th>
-              <th class="px-4 py-2.5 font-medium">Tanggal Lahir</th>
-              <th class="px-4 py-2.5 font-medium">Status</th>
-              <th class="px-4 py-2.5 font-medium text-right">Aksi</th>
-            </tr>
-          </thead>
-          <tbody id="emp-tbody" class="divide-y divide-slate-100"></tbody>
-        </table>
-      </div>
-    </div>
-  `;
-
-  const tbody = document.getElementById('emp-tbody');
-  if (employees.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="6" class="px-4 py-8 text-center text-slate-400">Belum ada karyawan.</td></tr>`;
-  } else {
-    tbody.innerHTML = employees.map(emp => {
-      const birthday = isBirthdayToday(emp.birthDate);
-      return `
-        <tr class="${birthday ? 'bg-amber-50' : ''}">
-          <td class="px-4 py-2.5 text-slate-500 font-mono text-xs">${escapeHtml(emp.employeeCode || '—')}</td>
-          <td class="px-4 py-2.5 text-slate-700">${escapeHtml(emp.name)}${birthday ? ' 🎂' : ''}</td>
-          <td class="px-4 py-2.5 text-slate-700">${formatRupiah(emp.dailyWage)}</td>
-          <td class="px-4 py-2.5 text-slate-500">${emp.birthDate ? formatTanggalIndo(emp.birthDate) : '-'}</td>
-          <td class="px-4 py-2.5">
-            <span class="text-xs font-medium px-2.5 py-1 rounded-full border ${emp.active ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-500 border-slate-200'}">${emp.active ? 'Aktif' : 'Nonaktif'}</span>
-          </td>
-          <td class="px-4 py-2.5 text-right">
-            <button data-id="${emp.id}" class="btn-edit-emp text-indigo-600 hover:underline text-sm font-medium">Edit</button>
-          </td>
-        </tr>
-      `;
-    }).join('');
-  }
-
-  document.getElementById('btn-add-emp').addEventListener('click', () => openEmployeeModal(null));
-  tbody.querySelectorAll('.btn-edit-emp').forEach(btn => {
-    btn.addEventListener('click', () => openEmployeeModal(btn.dataset.id));
+/* Mengecilkan foto di browser sebelum dikirim: sisi terpanjang 320px, JPEG
+   kualitas 0,8 — hasilnya biasanya 15-40 KB, jadi pengguna tidak perlu
+   memikirkan ukuran berkas aslinya. Server tetap memvalidasi sendiri. */
+function resizePhotoToDataUrl(file, maxSide = 320) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('Berkas tidak bisa dibaca.'));
+    reader.onload = () => {
+      const img = new Image();
+      img.onerror = () => reject(new Error('Berkas ini bukan gambar yang bisa dibaca.'));
+      img.onload = () => {
+        const scale = Math.min(1, maxSide / Math.max(img.width, img.height));
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.max(1, Math.round(img.width * scale));
+        canvas.height = Math.max(1, Math.round(img.height * scale));
+        canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL('image/jpeg', 0.8));
+      };
+      img.src = reader.result;
+    };
+    reader.readAsDataURL(file);
   });
 }
 
@@ -250,6 +221,14 @@ async function openEmployeeModal(employeeId) {
     <div class="p-5">
       <h3 class="font-bold text-slate-800 mb-4">${isEdit ? 'Edit Karyawan' : 'Tambah Karyawan'}</h3>
       <form id="form-emp" class="space-y-3">
+        <div class="flex items-center gap-4">
+          <div id="photo-preview">${employeeAvatarHtml(emp || { name: '', hasPhoto: false }, 'w-16 h-16')}</div>
+          <div class="flex flex-col gap-1.5">
+            <input type="file" id="photo-file" accept="image/*" class="hidden" />
+            <button type="button" id="btn-pick-photo" class="px-3 py-1.5 rounded-lg border border-slate-300 text-slate-600 text-sm font-medium hover:bg-slate-50 w-fit">Pilih Foto</button>
+            <button type="button" id="btn-remove-photo" class="text-rose-600 hover:underline text-xs font-medium w-fit ${emp && emp.hasPhoto ? '' : 'hidden'}">Hapus Foto</button>
+          </div>
+        </div>
         <div>
           <label class="text-sm text-slate-500 block mb-1">Employee ID</label>
           <input required name="employeeCode" value="${emp ? escapeHtml(emp.employeeCode || '') : ''}" placeholder="TDI-006" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
@@ -296,6 +275,38 @@ async function openEmployeeModal(employeeId) {
 
   document.getElementById('btn-cancel').addEventListener('click', closeModal);
 
+  /* undefined = pengguna tidak menyentuh foto (jangan diubah),
+     null = minta dihapus, string = data URL foto baru. Pembedaan ini penting:
+     tanpa itu, menyimpan perubahan nama akan diam-diam menghapus foto. */
+  let photoChange;
+  const photoPreview = document.getElementById('photo-preview');
+  const fileInput = document.getElementById('photo-file');
+  const removePhotoBtn = document.getElementById('btn-remove-photo');
+  const formError = document.getElementById('form-error');
+
+  document.getElementById('btn-pick-photo').addEventListener('click', () => fileInput.click());
+
+  fileInput.addEventListener('change', async () => {
+    const file = fileInput.files[0];
+    if (!file) return;
+    try {
+      photoChange = await resizePhotoToDataUrl(file);
+      photoPreview.innerHTML = `<img src="${photoChange}" alt="" class="w-16 h-16 rounded-full object-cover bg-slate-100" />`;
+      removePhotoBtn.classList.remove('hidden');
+      formError.classList.add('hidden');
+    } catch (err) {
+      formError.textContent = err.message;
+      formError.classList.remove('hidden');
+    }
+    fileInput.value = ''; // supaya memilih berkas yang sama lagi tetap memicu change
+  });
+
+  removePhotoBtn.addEventListener('click', () => {
+    photoChange = null;
+    photoPreview.innerHTML = employeeAvatarHtml({ name: document.querySelector('#form-emp [name="name"]').value, hasPhoto: false }, 'w-16 h-16');
+    removePhotoBtn.classList.add('hidden');
+  });
+
   if (isEdit) {
     document.getElementById('btn-delete-emp').addEventListener('click', async () => {
       if (!confirm(`Hapus karyawan "${emp.name}"? Riwayat absensinya akan tetap tersimpan.`)) return;
@@ -318,6 +329,7 @@ async function openEmployeeModal(employeeId) {
     record.dailyWage = Number(fd.get('dailyWage'));
     record.jobId = fd.get('jobId') ? Number(fd.get('jobId')) : null;
     record.organizationId = fd.get('organizationId') ? Number(fd.get('organizationId')) : null;
+    if (photoChange !== undefined) record.photo = photoChange;
     record.birthDate = fd.get('birthDate') || null;
     record.active = fd.get('active') === 'on';
 
