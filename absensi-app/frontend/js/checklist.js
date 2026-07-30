@@ -119,34 +119,25 @@ const MONITOR_SORT_KEYS = {
 
 function sortEmployeesForMonitor(employees) {
   const { key, dir } = MonitorSortState;
-  const rows = employees.slice();
-  if (key === 'no') return dir === 'asc' ? rows : rows.reverse();
+  // 'no' bukan nilai data, melainkan urutan asli dari server
+  if (key === 'no') {
+    const rows = employees.slice();
+    return dir === 'asc' ? rows : rows.reverse();
+  }
 
   const readValue = MONITOR_SORT_KEYS[key];
-  if (!readValue) return rows;
-
-  const factor = dir === 'asc' ? 1 : -1;
-  return rows.sort((a, b) => {
-    const av = readValue(a), bv = readValue(b);
-    // Nilai kosong selalu di akhir untuk kedua arah, supaya baris yang
-    // datanya belum lengkap tidak menumpuk di bagian atas tabel.
-    if (!av && !bv) return 0;
-    if (!av) return 1;
-    if (!bv) return -1;
-    return av.localeCompare(bv, 'id', { numeric: true, sensitivity: 'base' }) * factor;
-  });
+  if (!readValue) return employees.slice();
+  return sortRows(employees, readValue, dir);
 }
 
 function monitorSortableHeader(key, label, extraClass) {
-  const active = MonitorSortState.key === key;
-  const marker = active
-    ? `<span class="text-indigo-600">${MonitorSortState.dir === 'asc' ? '▲' : '▼'}</span>`
-    : `<span class="text-slate-300">⇅</span>`;
-  return `<th class="px-4 py-2.5 font-medium ${extraClass || ''}">
-      <button type="button" data-sort="${key}" class="monitor-sort flex items-center gap-1.5 hover:text-slate-700 transition">
-        <span>${label}</span>${marker}
-      </button>
-    </th>`;
+  return sortableHeaderHtml({
+    state: MonitorSortState,
+    key,
+    label,
+    className: extraClass,
+    buttonClass: 'monitor-sort'
+  });
 }
 
 async function renderMonitoringList(containerEl, employees, date, accountName) {
@@ -226,13 +217,7 @@ async function renderMonitoringList(containerEl, employees, date, accountName) {
 
   containerEl.querySelectorAll('.monitor-sort').forEach(btn => {
     btn.addEventListener('click', () => {
-      const key = btn.dataset.sort;
-      if (MonitorSortState.key === key) {
-        MonitorSortState.dir = MonitorSortState.dir === 'asc' ? 'desc' : 'asc';
-      } else {
-        MonitorSortState.key = key;
-        MonitorSortState.dir = 'asc';
-      }
+      Object.assign(MonitorSortState, nextSortState(MonitorSortState, btn.dataset.sort));
       renderMonitoringList(containerEl, employees, date, accountName);
     });
   });
