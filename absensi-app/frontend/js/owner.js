@@ -72,6 +72,7 @@ async function renderOwnerDashboard(account) {
           ${tabButton('karyawan', 'Data Karyawan')}
           ${tabButton('keterlambatan', 'Aturan Keterlambatan')}
           ${tabButton('lookup', 'Jabatan &amp; Divisi')}
+          ${tabButton('jadwal', 'Jadwal &amp; Libur')}
           ${tabButton('riwayat', 'Riwayat Absensi')}
           ${tabButton('laporan', 'Laporan Gaji')}
         </nav>
@@ -128,6 +129,7 @@ async function renderOwnerTab() {
   else if (OwnerState.tab === 'karyawan') renderEmployeeListTab(employees);
   else if (OwnerState.tab === 'keterlambatan') renderLatePolicyTab();
   else if (OwnerState.tab === 'lookup') renderLookupsTab();
+  else if (OwnerState.tab === 'jadwal') renderSchedulesTab();
   else if (OwnerState.tab === 'riwayat') renderRiwayatTab(employees.filter(e => e.active));
   else if (OwnerState.tab === 'laporan') renderLaporanTab();
 }

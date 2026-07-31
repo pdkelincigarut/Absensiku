@@ -125,5 +125,31 @@ const Storage = {
   },
   async deleteOrganization(id) {
     return apiRequest('DELETE', `/api/organizations/${id}`);
+  },
+
+  async getWorkSchedules() {
+    return apiRequest('GET', '/api/work-schedules');
+  },
+  async saveWorkSchedule(payload) {
+    return apiRequest('PUT', '/api/work-schedules', payload);
+  },
+  async deleteWorkSchedule(id) {
+    return apiRequest('DELETE', `/api/work-schedules/${id}`);
+  },
+
+  async getHolidays(year) {
+    const suffix = year ? `?year=${encodeURIComponent(year)}` : '';
+    return apiRequest('GET', `/api/holidays${suffix}`);
+  },
+  async saveHoliday(record) {
+    return apiRequest('POST', '/api/holidays', record);
+  },
+  async deleteHoliday(date) {
+    return apiRequest('DELETE', `/api/holidays/${date}`);
+  },
+
+  async recordCheckOut(employeeId, date) {
+    // jam diambil dari jam server, tidak ada yang dikirim dari sini
+    return apiRequest('POST', `/api/attendance/${employeeId}/${date}/check-out`);
   }
 };

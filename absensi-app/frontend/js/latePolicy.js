@@ -43,9 +43,10 @@ async function renderLatePolicyTab() {
             <tr>
               <th class="px-4 py-2.5 w-10"><input type="checkbox" id="lp-check-all" class="accent-indigo-600" /></th>
               <th class="px-4 py-2.5 font-medium">Nama</th>
-              <th class="px-4 py-2.5 font-medium">Jam Batas Masuk</th>
-              <th class="px-4 py-2.5 font-medium">Toleransi</th>
+              <th class="px-4 py-2.5 font-medium">Toleransi Telat</th>
+              <th class="px-4 py-2.5 font-medium">Ambang</th>
               <th class="px-4 py-2.5 font-medium">Skema Potongan</th>
+              <th class="px-4 py-2.5 font-medium">Berlaku Mulai</th>
               <th class="px-4 py-2.5 font-medium text-right">Aksi</th>
             </tr>
           </thead>
@@ -53,27 +54,45 @@ async function renderLatePolicyTab() {
         </table>
       </div>
     </div>
-    <p class="text-xs text-slate-400 mt-4">Keterlambatan dihitung dari jam masuk yang tercatat otomatis saat HR menceklis "hadir". Total menit telat diakumulasi sepanjang periode gaji (27&ndash;26); potongan baru berlaku kalau totalnya melewati toleransi. Karyawan tanpa aturan tidak pernah terkena potongan.</p>
+    <p class="text-xs text-slate-400 mt-4">Batas telat dihitung dari <strong>jam masuk terjadwal ditambah toleransi</strong> &mdash; jadi kalau jadwal masuk 08:00 dan toleransi 30 menit, batasnya 08:30. Mengubah jam masuk di tab Jadwal &amp; Libur otomatis menggeser batas ini. Total menit telat diakumulasi sepanjang periode gaji (27&ndash;26); potongan baru berlaku kalau totalnya melewati ambang. Menyimpan aturan membuat versi baru, dan perhitungan sebelum tanggal berlakunya tidak ikut berubah.</p>
   `;
 
   const tbody = document.getElementById('lp-tbody');
   if (list.length === 0) {
     tbody.innerHTML = `<tr><td colspan="6" class="px-4 py-8 text-center text-slate-400">Belum ada karyawan.</td></tr>`;
   } else {
+    // Satu karyawan bisa punya beberapa versi aturan; tiap versi jadi satu baris,
+    // nama hanya ditulis di baris pertama supaya kelompoknya terbaca.
     tbody.innerHTML = list.map(row => {
-      const p = row.latePolicy;
-      return `
-        <tr>
-          <td class="px-4 py-2.5"><input type="checkbox" data-id="${row.employeeId}" class="lp-check accent-indigo-600" ${LatePolicyState.selected.has(row.employeeId) ? 'checked' : ''} /></td>
-          <td class="px-4 py-2.5 text-slate-700">${escapeHtml(row.name)}</td>
-          <td class="px-4 py-2.5 ${p ? 'text-slate-700 font-mono' : 'text-slate-400'}">${p ? escapeHtml(p.checkInLimit) : 'Belum diatur'}</td>
-          <td class="px-4 py-2.5 text-slate-600">${p ? p.thresholdMinutes + ' menit' : '&mdash;'}</td>
-          <td class="px-4 py-2.5 text-slate-600">${p ? escapeHtml(deductionSummary(p)) : '&mdash;'}</td>
+      const checkbox = `<input type="checkbox" data-id="${row.employeeId}" class="lp-check accent-indigo-600" ${LatePolicyState.selected.has(row.employeeId) ? 'checked' : ''} />`;
+
+      if (row.versions.length === 0) {
+        return `
+          <tr>
+            <td class="px-4 py-2.5">${checkbox}</td>
+            <td class="px-4 py-2.5 text-slate-700">${escapeHtml(row.name)}</td>
+            <td class="px-4 py-2.5 text-slate-400">Belum diatur</td>
+            <td class="px-4 py-2.5 text-slate-400">&mdash;</td>
+            <td class="px-4 py-2.5 text-slate-400">&mdash;</td>
+            <td class="px-4 py-2.5 text-slate-400">&mdash;</td>
+            <td class="px-4 py-2.5"></td>
+          </tr>
+        `;
+      }
+
+      return row.versions.map((v, i) => `
+        <tr class="${i > 0 ? 'bg-slate-50/60' : ''}">
+          <td class="px-4 py-2.5">${i === 0 ? checkbox : ''}</td>
+          <td class="px-4 py-2.5 text-slate-700">${i === 0 ? escapeHtml(row.name) : ''}</td>
+          <td class="px-4 py-2.5 text-slate-700">${v.graceMinutes} menit</td>
+          <td class="px-4 py-2.5 text-slate-600">${v.thresholdMinutes} menit</td>
+          <td class="px-4 py-2.5 text-slate-600">${escapeHtml(deductionSummary(v))}</td>
+          <td class="px-4 py-2.5 text-slate-500">${escapeHtml(v.effectiveFrom)}${i === 0 ? ' <span class="text-xs text-emerald-600">(berlaku)</span>' : ''}</td>
           <td class="px-4 py-2.5 text-right">
-            ${p ? `<button data-id="${row.employeeId}" data-name="${escapeHtml(row.name)}" class="lp-delete text-rose-600 hover:underline text-sm font-medium">Hapus aturan</button>` : ''}
+            <button data-version="${v.id}" data-name="${escapeHtml(row.name)}" data-date="${escapeHtml(v.effectiveFrom)}" class="lp-delete text-rose-600 hover:underline text-sm font-medium">Hapus</button>
           </td>
         </tr>
-      `;
+      `).join('');
     }).join('');
   }
 
@@ -111,10 +130,9 @@ async function renderLatePolicyTab() {
 
   tbody.querySelectorAll('.lp-delete').forEach(btn => {
     btn.addEventListener('click', async () => {
-      if (!confirm(`Hapus aturan keterlambatan untuk "${btn.dataset.name}"? Karyawan ini tidak akan terkena potongan lagi.`)) return;
+      if (!confirm(`Hapus versi aturan "${btn.dataset.name}" yang berlaku mulai ${btn.dataset.date}? Perhitungan akan kembali memakai versi lain yang berlaku.`)) return;
       try {
-        await Storage.deleteLatePolicy(btn.dataset.id);
-        LatePolicyState.selected.delete(Number(btn.dataset.id));
+        await Storage.deleteLatePolicy(btn.dataset.version);
         renderLatePolicyTab();
       } catch (err) {
         alert(`Gagal menghapus: ${err.message}`);
@@ -129,7 +147,8 @@ function openLatePolicyModal(list) {
   const ids = Array.from(LatePolicyState.selected);
   // kalau tepat satu karyawan dipilih dan sudah punya aturan, isi form dengan nilainya
   const only = ids.length === 1 ? list.find(r => r.employeeId === ids[0]) : null;
-  const p = only && only.latePolicy ? only.latePolicy : null;
+  // versi paling baru dipakai sebagai nilai awal form
+  const p = only && only.versions.length > 0 ? only.versions[0] : null;
   const type = p ? p.deductionType : 'flat';
 
   openModal(`
@@ -138,12 +157,18 @@ function openLatePolicyModal(list) {
       <p class="text-xs text-slate-400 mb-4">Aturan ini akan berlaku untuk semua karyawan yang dicentang.</p>
       <form id="form-lp" class="space-y-3">
         <div>
-          <label class="text-sm text-slate-500 block mb-1">Jam batas masuk</label>
-          <input required type="time" name="checkInLimit" value="${p ? escapeHtml(p.checkInLimit) : '08:30'}" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+          <label class="text-sm text-slate-500 block mb-1">Toleransi keterlambatan (menit setelah jam masuk)</label>
+          <input required type="number" min="0" name="graceMinutes" value="${p ? p.graceMinutes : 30}" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+          <p class="text-xs text-slate-400 mt-1">Dihitung dari jam masuk terjadwal karyawan, bukan jam tetap.</p>
         </div>
         <div>
-          <label class="text-sm text-slate-500 block mb-1">Toleransi keterlambatan (menit per periode gaji)</label>
+          <label class="text-sm text-slate-500 block mb-1">Ambang akumulasi telat (menit per periode gaji)</label>
           <input required type="number" min="0" name="thresholdMinutes" value="${p ? p.thresholdMinutes : 30}" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+        </div>
+        <div>
+          <label class="text-sm text-slate-500 block mb-1">Berlaku mulai</label>
+          <input required type="date" name="effectiveFrom" value="${todayStr()}" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+          <p class="text-xs text-slate-400 mt-1">Perhitungan sebelum tanggal ini tetap memakai aturan lama.</p>
         </div>
         <div>
           <label class="text-sm text-slate-500 block mb-2">Skema potongan</label>
@@ -202,8 +227,9 @@ function openLatePolicyModal(list) {
     const fd = new FormData(e.target);
     const payload = {
       employeeIds: ids,
-      checkInLimit: fd.get('checkInLimit'),
+      graceMinutes: Number(fd.get('graceMinutes')),
       thresholdMinutes: Number(fd.get('thresholdMinutes')),
+      effectiveFrom: fd.get('effectiveFrom'),
       deductionType: fd.get('deductionType')
     };
     if (payload.deductionType === 'flat') payload.deductionFlatAmount = Number(fd.get('deductionFlatAmount'));

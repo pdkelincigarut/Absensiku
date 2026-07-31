@@ -96,7 +96,10 @@ function renderBirthdayBanner(containerEl, employees) {
 function formatKeterangan(rec) {
   if (!rec) return '-';
   if (rec.status === 'hadir') {
-    const detail = `${ATTENDANCE_TYPE_LABEL[rec.attendanceType]} · ${rec.checkInTime}`;
+    // Jam pulang yang belum dicatat ditulis apa adanya, bukan strip kosong —
+    // strip gampang disalahartikan sebagai "pulang tepat waktu".
+    const pulang = rec.checkOutTime ? escapeHtml(rec.checkOutTime) : '<span class="text-slate-400">pulang belum dicatat</span>';
+    const detail = `${ATTENDANCE_TYPE_LABEL[rec.attendanceType]} · ${rec.checkInTime} → ${pulang}`;
     return rec.note ? `${detail} · ${escapeHtml(rec.note)}` : detail;
   }
   return rec.note ? `${STATUS_LABEL[rec.status]} – ${escapeHtml(rec.note)}` : STATUS_LABEL[rec.status];
@@ -272,6 +275,22 @@ function renderAttendancePanel(containerEl, emp, rec, date, accountName, onSaved
   containerEl.innerHTML = `
     <div class="border border-slate-200 rounded-xl bg-white p-4 mt-1">
       <p class="text-xs text-slate-400 mb-3">Ceklis kehadiran — ${escapeHtml(emp.name)} &middot; ${formatTanggalIndo(date)}</p>
+
+      ${rec && rec.status === 'hadir' ? `
+        <div class="flex items-center gap-3 mb-4 pb-4 border-b border-slate-100">
+          <div class="text-sm">
+            <span class="text-slate-500">Jam masuk</span>
+            <span class="font-mono text-slate-700 ml-1">${escapeHtml(rec.checkInTime || '—')}</span>
+            <span class="text-slate-300 mx-1.5">&middot;</span>
+            <span class="text-slate-500">Jam pulang</span>
+            <span class="font-mono ${rec.checkOutTime ? 'text-slate-700' : 'text-slate-400'} ml-1">${rec.checkOutTime ? escapeHtml(rec.checkOutTime) : 'belum dicatat'}</span>
+          </div>
+          <button type="button" class="btn-check-out px-3 py-1.5 rounded-lg border border-slate-300 text-slate-600 text-sm font-medium hover:bg-slate-50 ml-auto">
+            ${rec.checkOutTime ? 'Perbarui Jam Pulang' : 'Catat Jam Pulang'}
+          </button>
+        </div>
+      ` : ''}
+
       <form class="space-y-4">
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 max-w-lg">
           ${['hadir', 'izin', 'sakit', 'alpa'].map(s => `
@@ -317,6 +336,20 @@ function renderAttendancePanel(containerEl, emp, rec, date, accountName, onSaved
   `;
 
   const form = containerEl.querySelector('form');
+
+  const checkOutBtn = containerEl.querySelector('.btn-check-out');
+  if (checkOutBtn) {
+    checkOutBtn.addEventListener('click', async () => {
+      checkOutBtn.disabled = true;
+      try {
+        await Storage.recordCheckOut(emp.id, date);
+        onSaved(); // render ulang supaya jam pulang yang baru langsung tampak
+      } catch (err) {
+        alert(`Gagal mencatat jam pulang: ${err.message}`);
+        checkOutBtn.disabled = false;
+      }
+    });
+  }
 
   const toggleHadirFields = () => {
     const status = form.querySelector('input[name="status"]:checked').value;
