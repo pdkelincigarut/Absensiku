@@ -24,7 +24,10 @@ function toJson(row) {
     workDays: row.work_days,
     startTime: row.start_time,
     endTime: row.end_time,
-    effectiveFrom: row.effective_from
+    effectiveFrom: row.effective_from,
+    // true hanya untuk jadwal tebakan yang disisipkan migrasi dan belum
+    // pernah diganti owner; apa pun yang disimpan lewat PUT selalu false
+    isSeeded: !!row.is_seeded
   };
 }
 

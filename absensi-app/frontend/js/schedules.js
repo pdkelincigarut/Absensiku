@@ -7,10 +7,6 @@
 
 const DAY_LABELS = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
 
-// Nilai yang disisipkan migrasi 006; dipakai untuk mengenali jadwal yang
-// belum pernah diperiksa owner.
-const MIGRATION_EFFECTIVE_FROM = '1970-01-01';
-
 const SchedulesState = { holidayYear: String(new Date().getFullYear()) };
 
 function formatWorkDays(workDays) {
@@ -41,10 +37,9 @@ async function renderSchedulesTab() {
     return;
   }
 
-  // Jadwal baku masih apa adanya dari migrasi kalau hanya ada satu versi dan
-  // tanggal berlakunya masih nilai bawaan — artinya owner belum memeriksanya.
-  const belumDiperiksa = schedules.company.length === 1
-    && schedules.company[0].effectiveFrom === MIGRATION_EFFECTIVE_FROM;
+  // Penanda dari server. Jangan menebaknya dari effective_from: owner yang
+  // sengaja mengoreksi jadwal sejak awal juga memakai tanggal yang sama.
+  const belumDiperiksa = schedules.company.some(s => s.isSeeded);
 
   container.innerHTML = `
     ${belumDiperiksa ? `

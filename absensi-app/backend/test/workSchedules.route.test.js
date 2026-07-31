@@ -40,13 +40,30 @@ test('GET mengembalikan jadwal baku hasil migrasi', async () => {
   assert.equal(data.company[0].effectiveFrom, '1970-01-01');
 });
 
+test('jadwal bawaan migrasi ditandai isSeeded', async () => {
+  const data = await (await fetch(`http://localhost:${port}/api/work-schedules`)).json();
+  assert.equal(data.company[0].isSeeded, true);
+});
+
+test('jadwal yang disimpan owner tidak pernah ditandai isSeeded, walau berlaku sejak 1970', async () => {
+  // Owner yang mengoreksi jadwal sejak awal memakai tanggal yang sama dengan
+  // bawaan migrasi — penanda harus datang dari kolomnya, bukan dari tanggal.
+  await put({ employeeIds: null, workDays: '1,2,3,4,5,6', startTime: '07:30', endTime: '16:30', effectiveFrom: '1970-01-01' });
+
+  const data = await (await fetch(`http://localhost:${port}/api/work-schedules`)).json();
+  const milikOwner = data.company.find(s => s.startTime === '07:30');
+  assert.equal(milikOwner.isSeeded, false);
+});
+
 test('PUT dengan employeeIds null menambah versi jadwal baku', async () => {
-  const res = await put({ employeeIds: null, workDays: '1,2,3,4,5,6', startTime: '07:30', endTime: '16:00', effectiveFrom: '2026-06-01' });
+  const sebelum = (await (await fetch(`http://localhost:${port}/api/work-schedules`)).json()).company.length;
+
+  const res = await put({ employeeIds: null, workDays: '1,2,3,4,5,6', startTime: '07:00', endTime: '16:00', effectiveFrom: '2026-06-01' });
   assert.equal(res.status, 200);
 
   const data = await (await fetch(`http://localhost:${port}/api/work-schedules`)).json();
-  assert.equal(data.company.length, 2, 'versi baru disisipkan, bukan menimpa');
-  assert.ok(data.company.some(s => s.effectiveFrom === '2026-06-01' && s.startTime === '07:30'));
+  assert.equal(data.company.length, sebelum + 1, 'versi baru disisipkan, bukan menimpa');
+  assert.ok(data.company.some(s => s.effectiveFrom === '2026-06-01' && s.startTime === '07:00'));
 });
 
 test('PUT dengan daftar employeeIds membuat pengecualian per karyawan', async () => {
