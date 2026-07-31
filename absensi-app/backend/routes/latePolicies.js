@@ -1,7 +1,14 @@
 /* ============================================================
    routes/latePolicies.js — Aturan keterlambatan & potongan gaji
-   per karyawan. Owner only. employee_id adalah primary key di
-   late_policies, jadi PUT selalu upsert (satu aturan per karyawan).
+   per karyawan, BERVERSI. Setiap penyimpanan membuat versi baru
+   dengan tanggal mulai berlaku, bukan menimpa yang lama —
+   supaya perhitungan periode lampau tidak ikut berubah saat
+   owner mengganti aturan hari ini.
+
+   Toleransi dinyatakan sebagai MENIT SETELAH JAM MASUK
+   TERJADWAL (grace_minutes), bukan jam absolut, supaya
+   menggeser jam masuk di jadwal ikut menggeser batas telat.
+   Owner only.
    ============================================================ */
 
 const express = require('express');
@@ -11,42 +18,49 @@ const { requireOwner } = require('../middleware/auth');
 const router = express.Router();
 
 const DEDUCTION_TYPES = ['flat', 'per_minute', 'percentage'];
+const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
-function toLatePolicyJson(row) {
-  if (!row) return null;
+function toJson(row) {
   return {
-    checkInLimit: row.check_in_limit,
+    id: row.id,
+    graceMinutes: row.grace_minutes,
     thresholdMinutes: row.threshold_minutes,
     deductionType: row.deduction_type,
     deductionFlatAmount: row.deduction_flat_amount,
     deductionPerMinuteAmount: row.deduction_per_minute_amount,
-    deductionPercentage: row.deduction_percentage
+    deductionPercentage: row.deduction_percentage,
+    effectiveFrom: row.effective_from
   };
 }
 
 router.get('/', requireOwner, (req, res) => {
   const employees = db.prepare('SELECT id, name FROM employees ORDER BY name').all();
-  const policies = new Map(
-    db.prepare('SELECT * FROM late_policies').all().map(row => [row.employee_id, row])
-  );
+  const all = db.prepare('SELECT * FROM late_policies ORDER BY effective_from DESC, id DESC').all();
+
+  const byEmployee = new Map();
+  for (const row of all) {
+    if (!byEmployee.has(row.employee_id)) byEmployee.set(row.employee_id, []);
+    byEmployee.get(row.employee_id).push(toJson(row));
+  }
+
   res.json(employees.map(emp => ({
     employeeId: emp.id,
     name: emp.name,
-    latePolicy: toLatePolicyJson(policies.get(emp.id))
+    versions: byEmployee.get(emp.id) || []
   })));
 });
 
 router.put('/', requireOwner, (req, res) => {
   const {
-    employeeIds, checkInLimit, thresholdMinutes, deductionType,
-    deductionFlatAmount, deductionPerMinuteAmount, deductionPercentage
+    employeeIds, graceMinutes, thresholdMinutes, deductionType,
+    deductionFlatAmount, deductionPerMinuteAmount, deductionPercentage, effectiveFrom
   } = req.body || {};
 
   if (!Array.isArray(employeeIds) || employeeIds.length === 0) {
     return res.status(400).json({ error: 'Pilih minimal satu karyawan.' });
   }
-  if (!checkInLimit || !/^\d{2}:\d{2}$/.test(checkInLimit)) {
-    return res.status(400).json({ error: 'Jam batas masuk wajib diisi format HH:MM.' });
+  if (!Number.isFinite(Number(graceMinutes)) || Number(graceMinutes) < 0) {
+    return res.status(400).json({ error: 'Toleransi keterlambatan wajib diisi angka 0 atau lebih.' });
   }
   if (!Number.isFinite(Number(thresholdMinutes)) || Number(thresholdMinutes) < 0) {
     return res.status(400).json({ error: 'Ambang menit telat wajib diisi angka 0 atau lebih.' });
@@ -63,6 +77,9 @@ router.put('/', requireOwner, (req, res) => {
   if (deductionType === 'percentage' && !Number.isFinite(Number(deductionPercentage))) {
     return res.status(400).json({ error: 'Persentase potongan wajib diisi.' });
   }
+  if (!DATE_PATTERN.test(String(effectiveFrom || ''))) {
+    return res.status(400).json({ error: 'Tanggal berlaku wajib diisi format YYYY-MM-DD.' });
+  }
 
   const existingIds = new Set(db.prepare('SELECT id FROM employees').all().map(r => r.id));
   for (const id of employeeIds) {
@@ -71,46 +88,39 @@ router.put('/', requireOwner, (req, res) => {
     }
   }
 
-  const upsert = db.prepare(`
+  const insert = db.prepare(`
     INSERT INTO late_policies (
-      employee_id, check_in_limit, threshold_minutes, deduction_type,
-      deduction_flat_amount, deduction_per_minute_amount, deduction_percentage, updated_at
-    ) VALUES (@employeeId, @checkInLimit, @thresholdMinutes, @deductionType,
-      @deductionFlatAmount, @deductionPerMinuteAmount, @deductionPercentage, @updatedAt)
-    ON CONFLICT(employee_id) DO UPDATE SET
-      check_in_limit = excluded.check_in_limit,
-      threshold_minutes = excluded.threshold_minutes,
-      deduction_type = excluded.deduction_type,
-      deduction_flat_amount = excluded.deduction_flat_amount,
-      deduction_per_minute_amount = excluded.deduction_per_minute_amount,
-      deduction_percentage = excluded.deduction_percentage,
-      updated_at = excluded.updated_at
+      employee_id, grace_minutes, threshold_minutes, deduction_type,
+      deduction_flat_amount, deduction_per_minute_amount, deduction_percentage,
+      effective_from, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
 
   const now = Date.now();
   for (const id of employeeIds) {
-    upsert.run({
-      employeeId: Number(id),
-      checkInLimit,
-      thresholdMinutes: Number(thresholdMinutes),
+    insert.run(
+      Number(id),
+      Number(graceMinutes),
+      Number(thresholdMinutes),
       deductionType,
-      deductionFlatAmount: deductionType === 'flat' ? Number(deductionFlatAmount) : null,
-      deductionPerMinuteAmount: deductionType === 'per_minute' ? Number(deductionPerMinuteAmount) : null,
-      deductionPercentage: deductionType === 'percentage' ? Number(deductionPercentage) : null,
-      updatedAt: now
-    });
+      deductionType === 'flat' ? Number(deductionFlatAmount) : null,
+      deductionType === 'per_minute' ? Number(deductionPerMinuteAmount) : null,
+      deductionType === 'percentage' ? Number(deductionPercentage) : null,
+      effectiveFrom,
+      now
+    );
   }
 
-  const placeholders = employeeIds.map(() => '?').join(',');
-  const rows = db.prepare(`SELECT * FROM late_policies WHERE employee_id IN (${placeholders})`)
-    .all(...employeeIds.map(Number));
-  res.json(rows.map(row => ({ employeeId: row.employee_id, ...toLatePolicyJson(row) })));
+  res.json({ ok: true, saved: employeeIds.length });
 });
 
-router.delete('/:employeeId', requireOwner, (req, res) => {
-  const row = db.prepare('SELECT employee_id FROM late_policies WHERE employee_id = ?').get(req.params.employeeId);
-  if (!row) return res.status(404).json({ error: 'Karyawan ini belum punya aturan keterlambatan.' });
-  db.prepare('DELETE FROM late_policies WHERE employee_id = ?').run(req.params.employeeId);
+/* Menghapus SATU versi berdasarkan id versinya, bukan semua aturan karyawan —
+   owner bisa membatalkan satu perubahan tanpa kehilangan riwayat lainnya. */
+router.delete('/:id', requireOwner, (req, res) => {
+  const row = db.prepare('SELECT id FROM late_policies WHERE id = ?').get(req.params.id);
+  if (!row) return res.status(404).json({ error: 'Versi aturan tidak ditemukan.' });
+
+  db.prepare('DELETE FROM late_policies WHERE id = ?').run(row.id);
   res.json({ ok: true });
 });
 
