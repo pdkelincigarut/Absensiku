@@ -30,7 +30,7 @@ test('migrasi 006 membuat jadwal baku perusahaan dan tabel hari libur', () => {
   assert.equal(company[0].effective_from, '1970-01-01');
 
   const holidayColumns = db.prepare(`PRAGMA table_info(holidays)`).all().map(c => c.name).sort();
-  assert.deepEqual(holidayColumns, ['created_at', 'date', 'name']);
+  assert.deepEqual(holidayColumns, ['created_at', 'date', 'is_estimate', 'name']);
 
   const attendanceColumns = db.prepare(`PRAGMA table_info(attendance)`).all().map(c => c.name);
   assert.ok(attendanceColumns.includes('check_out_time'));

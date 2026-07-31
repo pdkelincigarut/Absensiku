@@ -147,6 +147,12 @@ const Storage = {
   async deleteHoliday(date) {
     return apiRequest('DELETE', `/api/holidays/${date}`);
   },
+  async generateHolidays(year) {
+    return apiRequest('POST', '/api/holidays/generate', { year });
+  },
+  async confirmHoliday(date) {
+    return apiRequest('PATCH', `/api/holidays/${date}/confirm`);
+  },
 
   async recordCheckOut(employeeId, date) {
     // jam diambil dari jam server, tidak ada yang dikirim dari sini

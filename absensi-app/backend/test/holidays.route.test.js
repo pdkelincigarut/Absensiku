@@ -83,6 +83,89 @@ test('DELETE tanggal yang tidak ada membalas 404', async () => {
   assert.equal(res.status, 404);
 });
 
+test('POST /generate menyisipkan empat hari libur dan menandai perkiraan', async () => {
+  const res = await fetch(`http://localhost:${port}/api/holidays/generate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ year: 2028 })
+  });
+  const body = await res.json();
+  assert.equal(res.status, 200);
+  assert.ok(body.added.length > 0);
+  assert.equal(body.skipped.length, 0);
+
+  const kemerdekaan = body.added.find(h => h.date === '2028-08-17');
+  assert.equal(kemerdekaan.isEstimate, false);
+
+  const idulFitri = body.added.find(h => h.name === 'Idul Fitri');
+  assert.equal(idulFitri.isEstimate, true);
+
+  const list = await (await fetch(`http://localhost:${port}/api/holidays?year=2028`)).json();
+  assert.ok(list.some(h => h.date === '2028-08-17' && h.isEstimate === false));
+});
+
+test('POST /generate kedua kali melewati semua tanggal yang sudah ada', async () => {
+  await fetch(`http://localhost:${port}/api/holidays/generate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ year: 2029 })
+  });
+  const res = await fetch(`http://localhost:${port}/api/holidays/generate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ year: 2029 })
+  });
+  const body = await res.json();
+  assert.equal(body.added.length, 0);
+  assert.ok(body.skipped.length > 0);
+});
+
+test('POST /generate tidak menimpa hari libur yang sudah dikoreksi owner', async () => {
+  await post({ date: '2031-08-17', name: 'Koreksi Manual' });
+  const res = await fetch(`http://localhost:${port}/api/holidays/generate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ year: 2031 })
+  });
+  const body = await res.json();
+  assert.ok(body.skipped.some(h => h.date === '2031-08-17'));
+
+  const list = await (await fetch(`http://localhost:${port}/api/holidays?year=2031`)).json();
+  const entry = list.find(h => h.date === '2031-08-17');
+  assert.equal(entry.name, 'Koreksi Manual');
+});
+
+test('POST /generate menolak tahun yang tidak sah', async () => {
+  const res = await fetch(`http://localhost:${port}/api/holidays/generate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ year: 'abc' })
+  });
+  assert.equal(res.status, 400);
+});
+
+test('PATCH /:date/confirm menghapus penanda perkiraan', async () => {
+  await fetch(`http://localhost:${port}/api/holidays/generate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ year: 2032 })
+  });
+  const before = await (await fetch(`http://localhost:${port}/api/holidays?year=2032`)).json();
+  const estimated = before.find(h => h.isEstimate);
+  assert.ok(estimated);
+
+  const res = await fetch(`http://localhost:${port}/api/holidays/${estimated.date}/confirm`, { method: 'PATCH' });
+  assert.equal(res.status, 200);
+
+  const after = await (await fetch(`http://localhost:${port}/api/holidays?year=2032`)).json();
+  assert.equal(after.find(h => h.date === estimated.date).isEstimate, false);
+});
+
+test('PATCH /:date/confirm tanggal yang tidak ada membalas 404', async () => {
+  const res = await fetch(`http://localhost:${port}/api/holidays/2099-01-01/confirm`, { method: 'PATCH' });
+  assert.equal(res.status, 404);
+});
+
 test('akun HR ditolak mengakses endpoint hari libur', async () => {
   const res = await fetch(`http://localhost:${hrPort}/api/holidays`);
   assert.equal(res.status, 403);

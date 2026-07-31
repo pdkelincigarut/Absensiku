@@ -8,13 +8,26 @@
 const express = require('express');
 const db = require('../db');
 const { requireOwner } = require('../middleware/auth');
+const { nationalHolidays } = require('../holidayCalculator');
 
 const router = express.Router();
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
 function toJson(row) {
-  return { date: row.date, name: row.name };
+  return { date: row.date, name: row.name, isEstimate: !!row.is_estimate };
+}
+
+/* Jadwal baku perusahaan yang berlaku sekarang, dipakai untuk menempatkan
+   cuti bersama pada hari kerja. Jatuh ke Senin-Jumat kalau belum diatur. */
+function currentCompanyWorkDays() {
+  const row = db.prepare(`
+    SELECT work_days FROM work_schedules
+    WHERE employee_id IS NULL
+    ORDER BY effective_from DESC, id DESC
+    LIMIT 1
+  `).get();
+  return row ? row.work_days : '1,2,3,4,5';
 }
 
 router.get('/', requireOwner, (req, res) => {
@@ -41,6 +54,44 @@ router.post('/', requireOwner, (req, res) => {
 
   db.prepare('INSERT INTO holidays (date, name, created_at) VALUES (?, ?, ?)').run(date, cleanName, Date.now());
   res.status(201).json({ date, name: cleanName });
+});
+
+router.post('/generate', requireOwner, (req, res) => {
+  const year = Number(req.body && req.body.year);
+  if (!Number.isInteger(year) || year < 1900 || year > 2200) {
+    return res.status(400).json({ error: 'Tahun wajib diisi angka yang wajar.' });
+  }
+
+  const existing = new Set(
+    db.prepare('SELECT date FROM holidays WHERE date LIKE ?').all(`${year}-%`).map(r => r.date)
+  );
+
+  const insert = db.prepare('INSERT INTO holidays (date, name, is_estimate, created_at) VALUES (?, ?, ?, ?)');
+  const added = [];
+  const skipped = [];
+  const now = Date.now();
+
+  // Tanggal yang sudah ada dilewati, tidak ditimpa -- owner mungkin sudah
+  // mengoreksinya, dan menimpanya akan menghapus koreksi itu diam-diam.
+  for (const holiday of nationalHolidays(year, currentCompanyWorkDays())) {
+    if (existing.has(holiday.date)) {
+      skipped.push(holiday);
+      continue;
+    }
+    insert.run(holiday.date, holiday.name, holiday.isEstimate ? 1 : 0, now);
+    existing.add(holiday.date);
+    added.push(holiday);
+  }
+
+  res.json({ added, skipped });
+});
+
+router.patch('/:date/confirm', requireOwner, (req, res) => {
+  const row = db.prepare('SELECT date FROM holidays WHERE date = ?').get(req.params.date);
+  if (!row) return res.status(404).json({ error: 'Hari libur tidak ditemukan.' });
+
+  db.prepare('UPDATE holidays SET is_estimate = 0 WHERE date = ?').run(row.date);
+  res.json({ ok: true });
 });
 
 router.delete('/:date', requireOwner, (req, res) => {

@@ -261,6 +261,7 @@ function renderHolidayCard(holidays) {
           <select id="holiday-year" class="border border-slate-300 rounded-lg px-2 py-1 text-sm bg-white">
             ${years.map(y => `<option value="${y}" ${String(y) === SchedulesState.holidayYear ? 'selected' : ''}>${y}</option>`).join('')}
           </select>
+          <button id="btn-generate-holiday" class="px-3 py-1.5 rounded-lg border border-indigo-200 text-indigo-700 text-sm font-medium hover:bg-indigo-50">Isi Libur Nasional</button>
           <button id="btn-add-holiday" class="px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700">+ Tambah</button>
         </div>
       </div>
@@ -270,14 +271,23 @@ function renderHolidayCard(holidays) {
           : holidays.map(h => `
             <li class="flex items-center justify-between gap-3 px-4 py-2.5">
               <div class="min-w-0">
-                <p class="text-sm text-slate-700">${escapeHtml(h.name)}</p>
+                <p class="text-sm text-slate-700 flex items-center gap-2">
+                  ${escapeHtml(h.name)}
+                  ${h.isEstimate ? '<span class="px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 text-xs font-medium">perkiraan</span>' : ''}
+                </p>
                 <p class="text-xs text-slate-400">${formatTanggalIndo(h.date)}</p>
               </div>
-              <button data-date="${escapeHtml(h.date)}" data-name="${escapeHtml(h.name)}" class="btn-del-holiday text-rose-600 hover:underline text-sm font-medium shrink-0">Hapus</button>
+              <div class="flex items-center gap-3 shrink-0">
+                ${h.isEstimate ? `<button data-date="${escapeHtml(h.date)}" class="btn-confirm-holiday text-indigo-600 hover:underline text-sm font-medium">Konfirmasi</button>` : ''}
+                <button data-date="${escapeHtml(h.date)}" data-name="${escapeHtml(h.name)}" class="btn-del-holiday text-rose-600 hover:underline text-sm font-medium">Hapus</button>
+              </div>
             </li>
           `).join('')}
       </ul>
-      <p class="px-4 py-3 border-t border-slate-100 text-xs text-slate-400">Tanggal di sini tidak dihitung sebagai hari kerja, jadi tidak menambah alpa siapa pun.</p>
+      <p class="px-4 py-3 border-t border-slate-100 text-xs text-slate-400">
+        Tanggal di sini tidak dihitung sebagai hari kerja, jadi tidak menambah alpa siapa pun.
+        Tanggal berlabel "perkiraan" dihitung dari kalender Hijriah dan bisa berbeda sehari dari penetapan pemerintah — mohon dicek terhadap SKB, lalu dikonfirmasi atau diperbaiki tanggalnya.
+      </p>
     </div>
   `;
 
@@ -287,6 +297,33 @@ function renderHolidayCard(holidays) {
   });
 
   document.getElementById('btn-add-holiday').addEventListener('click', openHolidayModal);
+
+  document.getElementById('btn-generate-holiday').addEventListener('click', async (e) => {
+    const year = SchedulesState.holidayYear;
+    if (!confirm(`Isi hari libur nasional (Imlek, Idul Fitri, Idul Adha, Hari Kemerdekaan) untuk tahun ${year}?`)) return;
+    e.target.disabled = true;
+    try {
+      const result = await Storage.generateHolidays(Number(year));
+      alert(`${result.added.length} tanggal ditambahkan, ${result.skipped.length} dilewati karena sudah ada.`);
+      renderSchedulesTab();
+    } catch (err) {
+      alert(`Gagal mengisi hari libur: ${err.message}`);
+      e.target.disabled = false;
+    }
+  });
+
+  card.querySelectorAll('.btn-confirm-holiday').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      try {
+        await Storage.confirmHoliday(btn.dataset.date);
+        renderSchedulesTab();
+      } catch (err) {
+        alert(`Gagal mengonfirmasi: ${err.message}`);
+        btn.disabled = false;
+      }
+    });
+  });
 
   card.querySelectorAll('.btn-del-holiday').forEach(btn => {
     btn.addEventListener('click', async () => {
