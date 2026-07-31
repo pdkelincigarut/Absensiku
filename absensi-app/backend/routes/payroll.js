@@ -7,7 +7,8 @@
 const express = require('express');
 const db = require('../db');
 const { requireOwner } = require('../middleware/auth');
-const { computeLateMinutes, computeDeduction } = require('../lateCalculator');
+const { computeDeduction } = require('../lateCalculator');
+const { resolveSchedule, isWorkday, resolveLatePolicy, computeLateMinutes } = require('../scheduleResolver');
 
 const router = express.Router();
 
@@ -55,15 +56,18 @@ function bumpStatus(counts, status) {
   else counts.alpa++;
 }
 
-function toLatePolicyJson(row) {
-  if (!row) return null;
+/* Aturan sudah dipetakan ke camelCase saat dimuat, jadi cukup diteruskan
+   apa adanya minus field internal. */
+function toLatePolicyJson(policy) {
+  if (!policy) return null;
   return {
-    checkInLimit: row.check_in_limit,
-    thresholdMinutes: row.threshold_minutes,
-    deductionType: row.deduction_type,
-    deductionFlatAmount: row.deduction_flat_amount,
-    deductionPerMinuteAmount: row.deduction_per_minute_amount,
-    deductionPercentage: row.deduction_percentage
+    graceMinutes: policy.graceMinutes,
+    thresholdMinutes: policy.thresholdMinutes,
+    deductionType: policy.deductionType,
+    deductionFlatAmount: policy.deductionFlatAmount,
+    deductionPerMinuteAmount: policy.deductionPerMinuteAmount,
+    deductionPercentage: policy.deductionPercentage,
+    effectiveFrom: policy.effectiveFrom
   };
 }
 
@@ -76,42 +80,72 @@ router.get('/', requireOwner, (req, res) => {
 
   const employees = db.prepare('SELECT * FROM employees WHERE active = 1 ORDER BY name').all();
 
+  // Dimuat sekali untuk seluruh request, bukan per karyawan per hari
+  const schedules = db.prepare('SELECT * FROM work_schedules').all().map(r => ({
+    id: r.id,
+    employeeId: r.employee_id,
+    workDays: r.work_days,
+    startTime: r.start_time,
+    endTime: r.end_time,
+    effectiveFrom: r.effective_from
+  }));
+  const holidaySet = new Set(
+    db.prepare('SELECT date FROM holidays WHERE date >= ? AND date <= ?').all(startS, endS).map(r => r.date)
+  );
+  const policies = db.prepare('SELECT * FROM late_policies').all().map(r => ({
+    id: r.id,
+    employeeId: r.employee_id,
+    graceMinutes: r.grace_minutes,
+    thresholdMinutes: r.threshold_minutes,
+    deductionType: r.deduction_type,
+    deductionFlatAmount: r.deduction_flat_amount,
+    deductionPerMinuteAmount: r.deduction_per_minute_amount,
+    deductionPercentage: r.deduction_percentage,
+    effectiveFrom: r.effective_from
+  }));
+
   const rows = employees.map(emp => {
     const records = db.prepare(
       `SELECT date, status, hours_worked, check_in_time FROM attendance WHERE employee_id = ? AND date >= ? AND date <= ?`
     ).all(emp.id, startS, endS);
     const byDate = new Map(records.map(r => [r.date, r]));
-    const policyRow = db.prepare('SELECT * FROM late_policies WHERE employee_id = ?').get(emp.id);
 
-    const counts = { hadir: 0, izin: 0, sakit: 0, alpa: 0, totalHoursPaid: 0, totalWage: 0, lateMinutesTotal: 0 };
+    const counts = { hadir: 0, izin: 0, sakit: 0, alpa: 0, totalHoursPaid: 0, totalWage: 0, lateMinutesTotal: 0, scheduledDays: 0 };
     let cursor = startS;
     while (cursor <= endS && cursor <= todayS) {
+      const schedule = resolveSchedule(schedules, emp.id, cursor);
+      const workday = isWorkday(schedule, cursor, holidaySet);
+      if (workday && cursor < todayS) counts.scheduledDays++;
+
       const rec = byDate.get(cursor);
       if (rec) {
+        // Hari bercatatan SELALU dihitung, walaupun bukan hari kerja terjadwal —
+        // kalau dilewati, kerja lembur di hari Minggu jadi tidak dibayar.
         bumpStatus(counts, rec.status);
         if (rec.status === 'hadir') {
           const paidHours = Math.min(rec.hours_worked || 0, 8);
           counts.totalHoursPaid += paidHours;
           counts.totalWage += (paidHours / 8) * emp.daily_wage;
-          if (policyRow) {
-            counts.lateMinutesTotal += computeLateMinutes(rec.check_in_time, policyRow.check_in_limit);
+
+          const policy = resolveLatePolicy(policies, emp.id, cursor);
+          if (policy && schedule) {
+            counts.lateMinutesTotal += computeLateMinutes(rec.check_in_time, schedule.startTime, policy.graceMinutes);
           }
         }
-      } else if (cursor < todayS) {
-        counts.alpa++; // hari lampau tanpa data dianggap Alpa
+      } else if (workday && cursor < todayS) {
+        // Hanya hari kerja terjadwal lampau tanpa catatan yang dianggap Alpa.
+        // Akhir pekan dan hari libur dilewati begitu saja.
+        counts.alpa++;
       }
       cursor = addDaysStr(cursor, 1);
     }
 
+    // Potongan memakai versi aturan yang berlaku pada hari terakhir periode
+    const policyRow = resolveLatePolicy(policies, emp.id, endS < todayS ? endS : todayS);
+
     const latePolicy = toLatePolicyJson(policyRow);
     const deductionAmount = policyRow
-      ? computeDeduction({
-          thresholdMinutes: policyRow.threshold_minutes,
-          deductionType: policyRow.deduction_type,
-          deductionFlatAmount: policyRow.deduction_flat_amount,
-          deductionPerMinuteAmount: policyRow.deduction_per_minute_amount,
-          deductionPercentage: policyRow.deduction_percentage
-        }, counts.lateMinutesTotal, counts.totalWage)
+      ? computeDeduction(policyRow, counts.lateMinutesTotal, counts.totalWage)
       : 0;
     const finalWage = Math.max(0, counts.totalWage - deductionAmount);
 

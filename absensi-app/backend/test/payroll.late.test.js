@@ -36,9 +36,10 @@ function insertHadirToday(employeeId, checkInTime) {
 test('GET /api/payroll memotong gaji saat total menit telat melebihi ambang batas', async () => {
   const employeeId = insertEmployee('Telat Test', 100000);
   insertHadirToday(employeeId, '09:15');
+  // jadwal baku masuk 08:00 + toleransi 30 menit = batas 08:30, sama seperti sebelumnya
   db.prepare(`
-    INSERT INTO late_policies (employee_id, check_in_limit, threshold_minutes, deduction_type, deduction_flat_amount, updated_at)
-    VALUES (?, '08:30', 30, 'flat', 20000, ?)
+    INSERT INTO late_policies (employee_id, grace_minutes, threshold_minutes, deduction_type, deduction_flat_amount, effective_from, created_at)
+    VALUES (?, 30, 30, 'flat', 20000, '1970-01-01', ?)
   `).run(employeeId, Date.now());
 
   const res = await fetch(`http://localhost:${port}/api/payroll`);
