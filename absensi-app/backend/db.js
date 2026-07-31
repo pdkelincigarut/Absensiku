@@ -22,13 +22,21 @@ function runMigrations() {
   db.exec(`CREATE TABLE IF NOT EXISTS _migrations (name TEXT PRIMARY KEY, applied_at INTEGER NOT NULL)`);
 
   const migrationsDir = path.join(__dirname, 'migrations');
-  const files = fs.readdirSync(migrationsDir).filter(f => f.endsWith('.sql')).sort();
+  // .js diterima selain .sql untuk migrasi yang perlu logika — mis. mengonversi
+  // data lama sambil melaporkan baris mana yang terdampak, yang tidak bisa
+  // dilakukan SQL murni. Keduanya diurutkan bersama berdasarkan nama berkas.
+  const files = fs.readdirSync(migrationsDir)
+    .filter(f => f.endsWith('.sql') || f.endsWith('.js'))
+    .sort();
   const applied = new Set(db.prepare('SELECT name FROM _migrations').all().map(r => r.name));
 
   for (const file of files) {
     if (applied.has(file)) continue;
-    const sql = fs.readFileSync(path.join(migrationsDir, file), 'utf8');
-    db.exec(sql);
+    if (file.endsWith('.sql')) {
+      db.exec(fs.readFileSync(path.join(migrationsDir, file), 'utf8'));
+    } else {
+      require(path.join(migrationsDir, file))(db);
+    }
     db.prepare('INSERT INTO _migrations (name, applied_at) VALUES (?, ?)').run(file, Date.now());
     console.log(`Migration diterapkan: ${file}`);
   }
