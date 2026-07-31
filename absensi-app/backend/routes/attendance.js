@@ -26,6 +26,8 @@ function toJson(row) {
     attendanceType: row.attendance_type,
     hoursWorked: row.hours_worked,
     checkInTime: row.check_in_time,
+    // null berarti BELUM DICATAT — jangan diperlakukan sebagai pulang tepat waktu
+    checkOutTime: row.check_out_time,
     note: row.note,
     markedBy: row.marked_by,
     updatedAt: row.updated_at
@@ -96,6 +98,10 @@ router.put('/:employeeId/:date', requireAuth, (req, res) => {
       attendance_type = excluded.attendance_type,
       hours_worked = excluded.hours_worked,
       check_in_time = excluded.check_in_time,
+      -- Jam pulang dipertahankan selama statusnya tetap hadir (mengubah catatan
+      -- tidak boleh menghapusnya), tapi dibuang kalau harinya jadi izin/sakit/alpa
+      -- supaya tidak tertinggal jam pulang di hari yang orangnya tidak masuk.
+      check_out_time = CASE WHEN excluded.status = 'hadir' THEN attendance.check_out_time ELSE NULL END,
       note = excluded.note,
       marked_by = excluded.marked_by,
       updated_at = excluded.updated_at
@@ -117,6 +123,32 @@ router.put('/:employeeId/:date', requireAuth, (req, res) => {
     WHERE a.employee_id = ? AND a.date = ?
   `).get(employeeId, date);
   res.json(toJson(row));
+});
+
+/* Jam pulang diambil dari jam server, sama seperti jam masuk — nilai dari
+   client tidak pernah dipercaya. Memanggil ulang menimpa dengan jam terbaru,
+   yang berfungsi sebagai koreksi kalau HR menekannya kecepatan. */
+router.post('/:employeeId/:date/check-out', requireAuth, (req, res) => {
+  const { employeeId, date } = req.params;
+
+  const row = db.prepare('SELECT * FROM attendance WHERE employee_id = ? AND date = ?').get(employeeId, date);
+  if (!row) return res.status(404).json({ error: 'Belum ada catatan absensi untuk hari ini.' });
+  if (row.status !== 'hadir') {
+    return res.status(400).json({ error: 'Jam pulang hanya bisa dicatat untuk hari berstatus hadir.' });
+  }
+  if (!row.check_in_time) {
+    return res.status(400).json({ error: 'Jam masuk belum tercatat, jam pulang tidak bisa dicatat.' });
+  }
+
+  db.prepare('UPDATE attendance SET check_out_time = ?, marked_by = ?, updated_at = ? WHERE id = ?')
+    .run(serverTimeStr(), req.session.name, Date.now(), row.id);
+
+  const updated = db.prepare(`
+    SELECT a.*, e.name AS employee_name
+    FROM attendance a JOIN employees e ON e.id = a.employee_id
+    WHERE a.id = ?
+  `).get(row.id);
+  res.json(toJson(updated));
 });
 
 module.exports = router;
