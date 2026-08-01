@@ -73,19 +73,27 @@ function formatWaktuLog(ms) {
   return `${formatTanggalIndo(todayStr(d))} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
 }
 
-/* Peristiwa massal menghasilkan satu baris log per karyawan. Menampilkannya
-   satu per satu menenggelamkan koreksi sungguhan, jadi yang ber-createdAt dan
-   ber-action sama digabung menjadi satu baris ringkas. */
+/* Satu klik bisa menghasilkan banyak baris log: menandai seluruh karyawan
+   hadir, atau mengisi libur nasional setahun sekaligus. Menampilkannya satu
+   per satu menenggelamkan koreksi sungguhan, jadi baris ber-action dan
+   ber-createdAt sama digabung menjadi satu baris ringkas. */
+const AUDIT_GROUPED_ACTIONS = ['bulk_create', 'generate'];
+
+function bulkSummary(action, jumlah) {
+  if (action === 'generate') return `${jumlah} hari libur diisi otomatis`;
+  return `${jumlah} karyawan ditandai hadir sekaligus`;
+}
+
 function groupBulkEntries(entries) {
   const grouped = [];
   const bulkByKey = new Map();
 
   for (const entry of entries) {
-    if (entry.action !== 'bulk_create') {
+    if (!AUDIT_GROUPED_ACTIONS.includes(entry.action)) {
       grouped.push({ kind: 'single', entry });
       continue;
     }
-    const key = `${entry.createdAt}|${entry.accountId}`;
+    const key = `${entry.action}|${entry.createdAt}|${entry.accountId}`;
     if (bulkByKey.has(key)) {
       bulkByKey.get(key).members.push(entry);
       continue;
@@ -94,7 +102,10 @@ function groupBulkEntries(entries) {
     bulkByKey.set(key, group);
     grouped.push(group);
   }
-  return grouped;
+
+  // Satu baris yang kebetulan sendirian tidak perlu diringkas -- lebih
+  // berguna ditampilkan lengkap dengan isinya seperti baris biasa.
+  return grouped.map(g => (g.kind === 'bulk' && g.members.length === 1) ? { kind: 'single', entry: g.entry } : g);
 }
 
 function renderDiff(before, after) {
@@ -131,7 +142,7 @@ function renderAuditRow(group) {
   const entityLabel = AUDIT_ENTITY_LABEL[entry.entity] || entry.entity;
 
   const subject = group.kind === 'bulk'
-    ? `${group.members.length} karyawan ditandai hadir sekaligus`
+    ? escapeHtml(bulkSummary(entry.action, group.members.length))
     : `${entityLabel} #${escapeHtml(entry.entityId)}`;
 
   return `
