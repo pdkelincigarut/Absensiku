@@ -14,6 +14,7 @@
 const express = require('express');
 const db = require('../db');
 const { requireOwner } = require('../middleware/auth');
+const { recordAudit } = require('../auditLog');
 
 const router = express.Router();
 
@@ -34,7 +35,7 @@ function toJson(row) {
 }
 
 router.get('/', requireOwner, (req, res) => {
-  const employees = db.prepare('SELECT id, name FROM employees ORDER BY name').all();
+  const employees = db.prepare('SELECT id, name FROM employees WHERE deleted_at IS NULL ORDER BY name').all();
   const all = db.prepare('SELECT * FROM late_policies ORDER BY effective_from DESC, id DESC').all();
 
   const byEmployee = new Map();
@@ -81,7 +82,7 @@ router.put('/', requireOwner, (req, res) => {
     return res.status(400).json({ error: 'Tanggal berlaku wajib diisi format YYYY-MM-DD.' });
   }
 
-  const existingIds = new Set(db.prepare('SELECT id FROM employees').all().map(r => r.id));
+  const existingIds = new Set(db.prepare('SELECT id FROM employees WHERE deleted_at IS NULL').all().map(r => r.id));
   for (const id of employeeIds) {
     if (!existingIds.has(Number(id))) {
       return res.status(404).json({ error: `Karyawan dengan id ${id} tidak ditemukan.` });
@@ -98,7 +99,7 @@ router.put('/', requireOwner, (req, res) => {
 
   const now = Date.now();
   for (const id of employeeIds) {
-    insert.run(
+    const info = insert.run(
       Number(id),
       Number(graceMinutes),
       Number(thresholdMinutes),
@@ -109,6 +110,12 @@ router.put('/', requireOwner, (req, res) => {
       effectiveFrom,
       now
     );
+    recordAudit(req.session, {
+      action: 'create', entity: 'late_policy', entityId: info.lastInsertRowid,
+      before: null,
+      after: db.prepare('SELECT * FROM late_policies WHERE id = ?').get(info.lastInsertRowid),
+      createdAt: now
+    });
   }
 
   res.json({ ok: true, saved: employeeIds.length });
@@ -117,10 +124,16 @@ router.put('/', requireOwner, (req, res) => {
 /* Menghapus SATU versi berdasarkan id versinya, bukan semua aturan karyawan —
    owner bisa membatalkan satu perubahan tanpa kehilangan riwayat lainnya. */
 router.delete('/:id', requireOwner, (req, res) => {
-  const row = db.prepare('SELECT id FROM late_policies WHERE id = ?').get(req.params.id);
+  const row = db.prepare('SELECT * FROM late_policies WHERE id = ?').get(req.params.id);
   if (!row) return res.status(404).json({ error: 'Versi aturan tidak ditemukan.' });
 
   db.prepare('DELETE FROM late_policies WHERE id = ?').run(row.id);
+  // Sama seperti jadwal kerja: menghapus satu versi menggeser potongan gaji
+  // periode lampau, jadi isinya harus tersimpan sebelum hilang.
+  recordAudit(req.session, {
+    action: 'delete', entity: 'late_policy', entityId: row.id,
+    before: row, after: null, reason: (req.body || {}).reason
+  });
   res.json({ ok: true });
 });
 

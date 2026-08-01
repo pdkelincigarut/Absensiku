@@ -17,11 +17,13 @@ test.before(async () => {
 
 test.after(() => { server.close(); });
 
+/* reason selalu ikut: mengubah absensi yang sudah tercatat mewajibkannya,
+   dan diabaikan begitu saja saat baris itu baru dibuat. */
 function markAttendance(date, status) {
   return fetch(`http://localhost:${port}/api/attendance/${employeeId}/${date}`, {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ status, attendanceType: 'full' })
+    body: JSON.stringify({ status, attendanceType: 'full', reason: 'penyesuaian di test' })
   });
 }
 

@@ -75,6 +75,7 @@ async function renderOwnerDashboard(account) {
           ${tabButton('jadwal', 'Jadwal &amp; Libur')}
           ${tabButton('riwayat', 'Riwayat Absensi')}
           ${tabButton('laporan', 'Laporan Gaji')}
+          ${tabButton('log', 'Log Perubahan')}
         </nav>
       </header>
       <main class="max-w-5xl mx-auto px-4 py-6">
@@ -132,6 +133,7 @@ async function renderOwnerTab() {
   else if (OwnerState.tab === 'jadwal') renderSchedulesTab();
   else if (OwnerState.tab === 'riwayat') renderRiwayatTab(employees.filter(e => e.active));
   else if (OwnerState.tab === 'laporan') renderLaporanTab();
+  else if (OwnerState.tab === 'log') renderAuditTab();
 }
 
 /* ---------------- Tab: Monitoring Hari Ini ---------------- */

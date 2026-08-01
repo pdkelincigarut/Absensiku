@@ -9,8 +9,13 @@ const express = require('express');
 const db = require('../db');
 const { requireOwner } = require('../middleware/auth');
 const { nationalHolidays } = require('../holidayCalculator');
+const { recordAudit } = require('../auditLog');
 
 const router = express.Router();
+
+function findRow(date) {
+  return db.prepare('SELECT * FROM holidays WHERE date = ?').get(date);
+}
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -53,6 +58,9 @@ router.post('/', requireOwner, (req, res) => {
   }
 
   db.prepare('INSERT INTO holidays (date, name, created_at) VALUES (?, ?, ?)').run(date, cleanName, Date.now());
+  recordAudit(req.session, {
+    action: 'create', entity: 'holiday', entityId: date, before: null, after: findRow(date)
+  });
   res.status(201).json({ date, name: cleanName });
 });
 
@@ -79,6 +87,10 @@ router.post('/generate', requireOwner, (req, res) => {
       continue;
     }
     insert.run(holiday.date, holiday.name, holiday.isEstimate ? 1 : 0, now);
+    recordAudit(req.session, {
+      action: 'generate', entity: 'holiday', entityId: holiday.date,
+      before: null, after: findRow(holiday.date), createdAt: now
+    });
     existing.add(holiday.date);
     added.push(holiday);
   }
@@ -87,18 +99,27 @@ router.post('/generate', requireOwner, (req, res) => {
 });
 
 router.patch('/:date/confirm', requireOwner, (req, res) => {
-  const row = db.prepare('SELECT date FROM holidays WHERE date = ?').get(req.params.date);
+  const row = findRow(req.params.date);
   if (!row) return res.status(404).json({ error: 'Hari libur tidak ditemukan.' });
 
   db.prepare('UPDATE holidays SET is_estimate = 0 WHERE date = ?').run(row.date);
+  recordAudit(req.session, {
+    action: 'confirm', entity: 'holiday', entityId: row.date, before: row, after: findRow(row.date)
+  });
   res.json({ ok: true });
 });
 
 router.delete('/:date', requireOwner, (req, res) => {
-  const row = db.prepare('SELECT date FROM holidays WHERE date = ?').get(req.params.date);
+  const row = findRow(req.params.date);
   if (!row) return res.status(404).json({ error: 'Hari libur tidak ditemukan.' });
 
   db.prepare('DELETE FROM holidays WHERE date = ?').run(row.date);
+  // Hard delete disengaja: barisnya sepele dan bisa dibuat ulang, dan
+  // before_json di sini sudah cukup untuk memulihkannya kalau salah hapus.
+  recordAudit(req.session, {
+    action: 'delete', entity: 'holiday', entityId: row.date,
+    before: row, after: null, reason: (req.body || {}).reason
+  });
   res.json({ ok: true });
 });
 

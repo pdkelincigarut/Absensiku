@@ -248,17 +248,16 @@ async function renderMonitoringList(containerEl, employees, date, accountName) {
   if (headerCheckbox && unmarked.length > 0) {
     headerCheckbox.addEventListener('click', async (e) => {
       e.preventDefault();
-      if (!confirm(`Tandai ${unmarked.length} karyawan yang belum absen sebagai Hadir (Full Day) dengan jam saat ini?`)) return;
+      if (!confirm(
+        `Tandai ${unmarked.length} karyawan yang belum absen sebagai Hadir (Full Day) dengan jam saat ini?\n\n` +
+        `Tindakan ini tercatat di Log Perubahan atas nama ${accountName}.`
+      )) return;
       headerCheckbox.disabled = true;
       try {
-        await Promise.all(unmarked.map(emp => Storage.upsertAttendance({
-          employeeId: emp.id,
-          date,
-          status: 'hadir',
-          attendanceType: 'full',
-          hoursWorked: 8,
-          note: ''
-        })));
+        // Satu permintaan untuk seluruh rombongan, bukan N permintaan terpisah:
+        // server jadi tahu ini benar-benar satu tindakan massal dan bisa
+        // mencatatnya sebagai satu peristiwa di log.
+        await Storage.bulkMarkAttendance(date, unmarked.map(emp => emp.id));
       } catch (err) {
         alert(`Gagal menandai semua: ${err.message}`);
       }
@@ -326,6 +325,15 @@ function renderAttendancePanel(containerEl, emp, rec, date, accountName, onSaved
           <label class="text-sm text-slate-500 block mb-1">Catatan (opsional)</label>
           <textarea name="note" rows="2" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" placeholder="Contoh: Izin acara keluarga">${rec && rec.note ? escapeHtml(rec.note) : ''}</textarea>
         </div>
+
+        ${rec ? `
+          <div class="max-w-sm">
+            <label class="text-sm text-slate-500 block mb-1">Alasan koreksi <span class="text-rose-600">*</span></label>
+            <input type="text" name="reason" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" placeholder="Contoh: salah centang, yang bersangkutan izin" />
+            <p class="text-xs text-slate-400 mt-1">Hari ini sudah tercatat, jadi perubahannya masuk Log Perubahan atas nama ${escapeHtml(accountName)}.</p>
+          </div>
+        ` : ''}
+
         <p class="form-error text-sm text-rose-600 hidden"></p>
         <div class="flex gap-2 pt-1 max-w-sm">
           <button type="button" class="btn-close-panel flex-1 py-2 rounded-lg border border-slate-300 text-slate-600 font-medium text-sm">Tutup</button>
@@ -369,6 +377,22 @@ function renderAttendancePanel(containerEl, emp, rec, date, accountName, onSaved
     containerEl.closest('.panel-row').classList.add('hidden');
   });
 
+  /* Tombol simpan dimatikan selama alasan kosong, supaya penolakan tidak baru
+     muncul setelah dikirim -- pengguna sudah terlanjur mengisi seluruh form.
+     Server tetap memvalidasi ulang; ini kemudahan, bukan pengaman. */
+  const reasonInput = form.querySelector('input[name="reason"]');
+  if (reasonInput) {
+    const submitBtn = form.querySelector('button[type="submit"]');
+    const syncSubmitState = () => {
+      const empty = !reasonInput.value.trim();
+      submitBtn.disabled = empty;
+      submitBtn.classList.toggle('opacity-50', empty);
+      submitBtn.classList.toggle('cursor-not-allowed', empty);
+    };
+    reasonInput.addEventListener('input', syncSubmitState);
+    syncSubmitState();
+  }
+
   form.addEventListener('submit', async (e) => {
     e.preventDefault();
     const fd = new FormData(form);
@@ -400,7 +424,8 @@ function renderAttendancePanel(containerEl, emp, rec, date, accountName, onSaved
         status,
         attendanceType,
         hoursWorked,
-        note: fd.get('note') || ''
+        note: fd.get('note') || '',
+        reason: fd.get('reason') || ''
       });
       if (onSaved) onSaved();
     } catch (err) {

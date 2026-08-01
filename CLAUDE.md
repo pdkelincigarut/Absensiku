@@ -4,7 +4,9 @@ Panduan konteks project ini untuk Claude Code. File ini dibaca otomatis setiap s
 
 ## Tentang Project
 
-Absensiku adalah aplikasi absensi karyawan untuk **CV KLC Group**, dengan akses multi-role (HR admin & owner). Arah jangka panjang: **mencegah kecurangan absen** (titip absen / proxy attendance) lewat metode check-in yang sulit dimanipulasi.
+Absensiku adalah aplikasi absensi karyawan untuk **CV KLC Group**, dengan akses multi-role (HR admin & owner). Karyawan **tidak** punya login dan tidak menyentuh aplikasi — HR yang menandai kehadiran mereka.
+
+Karena itu kecurangan tidak dilawan lewat verifikasi identitas karyawan (tidak ada identitas yang perlu diverifikasi), melainkan lewat **akuntabilitas HR**: setiap perubahan data tercatat lengkap dengan pelaku dan alasannya, dan bisa ditelusuri owner. Keputusan ini diambil 2026-08-01; lihat spec akuntabilitas absensi.
 
 - Repo: `github.com/pdkelincigarut/Absensiku`
 - Bahasa utama: JavaScript
@@ -31,36 +33,34 @@ Bagian ini memisahkan **yang sudah jalan di kode** dari **yang masih rencana**. 
 | Hari libur | Input manual + auto-generate 4 libur nasional (Imlek, Idul Fitri, Idul Adha, Kemerdekaan) dengan flag `is_estimate` |
 | Aturan keterlambatan | Berversi, per karyawan, potongan flat / per-menit / persentase |
 | Laporan gaji | Periode 27 bulan lalu s/d 26 bulan berjalan, sudah hitung potongan telat |
+| Audit log | Tabel `audit_log`, tab "Log Perubahan" khusus Owner, snapshot sebelum/sesudah tiap perubahan |
+| Koreksi wajib beralasan | `reason` wajib saat mengubah absensi yang sudah tercatat, opsional saat input pertama |
+| Soft delete karyawan | `employees.deleted_at`; laporan gaji periode lampau tidak bergeser |
 
 ### Belum Dikerjakan (Roadmap)
 
-Urut dari yang paling kecil ketergantungannya:
-
 1. **Export rekap Excel/PDF** per periode, format siap dipakai payroll.
    Belum ada sama sekali — tidak ada dependency export, tidak ada endpoint. Perlu keputusan: generate di server (nambah dependency) atau di browser.
-2. **Koreksi absen manual wajib beralasan.**
-   Sekarang `PUT /api/attendance/:employeeId/:date` menerima `note` tapi **opsional**, dan `marked_by` cuma diisi nama akun tanpa riwayat perubahan. Belum ada field `reason` wajib.
-3. **Audit trail.**
-   Belum ada tabel audit sama sekali. Yang ada cuma `marked_by` + `updated_at` di baris absensi — ketimpa setiap kali diedit, jadi tidak bisa menjawab "siapa mengubah apa, kapan".
-4. **Soft delete.**
-   Belum ada kolom `deleted_at` di mana pun. Kondisi sekarang: absensi memang tidak punya endpoint DELETE (aman), tapi `employees`, `holidays`, `jobs`, `organizations`, `work_schedules`, `late_policies` semua **hard delete**.
-5. **Reminder/notifikasi** untuk karyawan yang belum absen.
-   Belum ada — tidak ada scheduler, tidak ada kanal notifikasi (email/WA/push) yang dipilih.
-6. **Anti-fraud check-in** — tujuan utama project, tapi paling jauh.
-   Sekarang check-in cuma jam server: HR/Owner bisa menandai kehadiran siapa pun, tidak ada verifikasi lokasi / device / foto saat absen. Foto karyawan yang ada sekarang **master data, bukan bukti absen**. Butuh spec sendiri sebelum disentuh.
+2. **Reminder/notifikasi** untuk karyawan yang belum absen.
+   Belum ada scheduler, dan kanalnya (email/WA/push) belum dipilih. Perlu diingat karyawan tidak punya akun di aplikasi ini.
+3. **Versi & penghapusan `work_schedules` / `late_policies`.**
+   Keduanya masih hard delete. Menghapus satu versi **mengubah gaji periode lampau** yang mungkin sudah dibayarkan. Isinya sekarang tersimpan di `audit_log` sehingga bisa dipulihkan manual, tapi tidak ada yang mencegah penghapusannya. Layak spec sendiri.
+4. **Memulihkan data dari audit log lewat UI.**
+   Snapshot `before_json` sudah lengkap, tapi belum ada tombol undo.
+
+### Dibatalkan
+
+**Anti-fraud check-in** (login karyawan, kiosk, selfie, geolocation, device binding) — dibatalkan 2026-08-01, bukan ditunda. Karyawan tidak absen sendiri, jadi tidak ada alur yang bisa ditambal. Digantikan akuntabilitas HR di tabel "Sudah Jalan". Jangan hidupkan lagi tanpa keputusan baru soal apakah karyawan mulai absen sendiri.
 
 ## Aturan & Konvensi Wajib
 
-Berlaku sekarang:
-
 - Perubahan yang menyentuh akses HR vs Owner harus jelas pemisahan permission-nya — pakai `requireAuth` / `requireOwner`, jangan cek role manual di dalam handler.
-- **Jangan tambah endpoint DELETE untuk data absensi.** Riwayat absensi tidak boleh hilang. Kalau butuh "hapus", tunggu soft delete (roadmap no. 4).
-- Jam absen selalu dari server. Jangan pernah terima `checkInTime` / `checkOutTime` dari body request.
-
-Berlaku **nanti**, setelah item roadmap terkait dikerjakan — jangan ditulis seolah sudah aktif:
-
-- Semua penghapusan jadi soft delete (`deleted_at`) — setelah roadmap no. 4.
-- Setiap koreksi manual wajib `reason` + tercatat di audit log — setelah roadmap no. 2 & 3.
+- **Jangan tambah endpoint DELETE untuk data absensi.** Riwayat absensi tidak boleh hilang.
+- **Menghapus karyawan = soft delete.** Query apa pun yang mendaftar karyawan wajib menyaring `deleted_at IS NULL`. Pengecualian tunggal: laporan gaji, yang sengaja tetap memasukkan karyawan terhapus kalau punya absensi di periode itu.
+- **Setiap route yang menulis data wajib memanggil `recordAudit`.** Log yang bolong berbohong lewat kekosongannya — pembaca menyimpulkan "tidak ada yang berubah" padahal cuma tidak dicatat.
+- **`audit_log` hanya dibaca.** Jangan pernah buat endpoint ubah atau hapus untuknya.
+- Alasan wajib **hanya** saat mengubah baris yang sudah ada. Mewajibkannya di input pertama akan menghasilkan alasan "." yang menyamarkan koreksi sungguhan.
+- Jam absen selalu dari server. Jangan pernah terima `checkInTime` / `checkOutTime` dari body request, dan **jangan stempel ulang `check_in_time` yang sudah terisi** — potongan keterlambatan dihitung dari kolom itu.
 
 ## Stack Teknologi
 
@@ -118,6 +118,7 @@ absensi-app/
       storage.js         # SATU-SATUNYA layer fetch ke API + helper format tanggal
       hr.js / owner.js   # dashboard per role (masing-masing punya tab sendiri)
       checklist.js, employeeList.js, latePolicy.js, lookups.js, schedules.js
+      auditView.js       # tab Log Perubahan (Owner only)
       tableUtils.js      # helper render tabel
 docs/superpowers/
   specs/                 # dokumen spesifikasi per fitur (bahasa Indonesia)
@@ -130,6 +131,8 @@ Logika perhitungan dipisah ke modul murni supaya gampang di-test tanpa DB. Janga
 - `scheduleResolver.js` — resolusi jadwal kerja berlaku pada tanggal tertentu, helper tanggal (`addDaysStr`, `dayOfWeek`)
 - `lateCalculator.js` — hitung menit telat & potongan
 - `holidayCalculator.js` — hitung tanggal libur nasional (Imlek/Idul Fitri/Idul Adha/Kemerdekaan) via `Intl.DateTimeFormat`
+
+`auditLog.js` di root backend **bukan** modul murni — dia menyentuh DB. Isinya `recordAudit()` dan `hasMeaningfulChange()`.
 
 ### Endpoint API
 
@@ -145,6 +148,7 @@ Semua di-mount di `server.js`, prefix `/api`:
 | `/api/attendance` | `routes/attendance.js` | |
 | `/api/payroll` | `routes/payroll.js` | |
 | `/api/late-policies` | `routes/latePolicies.js` | |
+| `/api/audit-log` | `routes/auditLog.js` | Owner only, hanya GET |
 
 ## Konvensi Kode
 

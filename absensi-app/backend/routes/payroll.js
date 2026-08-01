@@ -78,7 +78,18 @@ router.get('/', requireOwner, (req, res) => {
   const endS = dateToStr(period.end);
   const todayS = todayStr();
 
-  const employees = db.prepare('SELECT * FROM employees WHERE active = 1 ORDER BY name').all();
+  /* Karyawan yang sudah dihapus TETAP ikut kalau punya absensi di periode ini.
+     Menghilangkannya akan mengubah angka gaji periode yang mungkin sudah
+     dibayarkan -- persis kesalahan yang sudah dihindari effective_from di
+     tabel jadwal dan aturan keterlambatan. */
+  const employees = db.prepare(`
+    SELECT * FROM employees
+    WHERE (deleted_at IS NULL AND active = 1)
+       OR (deleted_at IS NOT NULL
+           AND EXISTS (SELECT 1 FROM attendance a
+                       WHERE a.employee_id = employees.id AND a.date >= ? AND a.date <= ?))
+    ORDER BY name
+  `).all(startS, endS);
 
   // Dimuat sekali untuk seluruh request, bukan per karyawan per hari
   const schedules = db.prepare('SELECT * FROM work_schedules').all().map(r => ({

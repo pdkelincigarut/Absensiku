@@ -13,6 +13,7 @@
 const express = require('express');
 const db = require('../db');
 const { requireOwner } = require('../middleware/auth');
+const { recordAudit } = require('../auditLog');
 
 function createLookupRouter({ table, employeeColumn, label }) {
   const router = express.Router();
@@ -37,7 +38,11 @@ function createLookupRouter({ table, employeeColumn, label }) {
     }
 
     const info = db.prepare(`INSERT INTO ${table} (name, created_at) VALUES (?, ?)`).run(name, Date.now());
-    res.status(201).json(findById.get(info.lastInsertRowid));
+    const created = findById.get(info.lastInsertRowid);
+    recordAudit(req.session, {
+      action: 'create', entity: table, entityId: created.id, before: null, after: created
+    });
+    res.status(201).json(created);
   });
 
   router.put('/:id', requireOwner, (req, res) => {
@@ -51,7 +56,11 @@ function createLookupRouter({ table, employeeColumn, label }) {
     if (clash) return res.status(400).json({ error: `${label} "${name}" sudah ada.` });
 
     db.prepare(`UPDATE ${table} SET name = ? WHERE id = ?`).run(name, row.id);
-    res.json(findById.get(row.id));
+    const updated = findById.get(row.id);
+    recordAudit(req.session, {
+      action: 'update', entity: table, entityId: row.id, before: row, after: updated
+    });
+    res.json(updated);
   });
 
   router.delete('/:id', requireOwner, (req, res) => {
@@ -60,7 +69,7 @@ function createLookupRouter({ table, employeeColumn, label }) {
 
     // Sengaja menolak, bukan mengosongkan kolom karyawan diam-diam —
     // menghapus data yang tidak diminta pengguna adalah kejutan yang buruk.
-    const { n } = db.prepare(`SELECT COUNT(*) AS n FROM employees WHERE ${employeeColumn} = ?`).get(row.id);
+    const { n } = db.prepare(`SELECT COUNT(*) AS n FROM employees WHERE ${employeeColumn} = ? AND deleted_at IS NULL`).get(row.id);
     if (n > 0) {
       return res.status(400).json({
         error: `${label} ini masih dipakai ${n} karyawan. Ubah data karyawan tersebut dulu sebelum menghapus.`
@@ -68,6 +77,10 @@ function createLookupRouter({ table, employeeColumn, label }) {
     }
 
     db.prepare(`DELETE FROM ${table} WHERE id = ?`).run(row.id);
+    recordAudit(req.session, {
+      action: 'delete', entity: table, entityId: row.id,
+      before: row, after: null, reason: (req.body || {}).reason
+    });
     res.json({ ok: true });
   });
 

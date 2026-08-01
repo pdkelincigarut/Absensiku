@@ -35,3 +35,16 @@ test('migrasi 006 membuat jadwal baku perusahaan dan tabel hari libur', () => {
   const attendanceColumns = db.prepare(`PRAGMA table_info(attendance)`).all().map(c => c.name);
   assert.ok(attendanceColumns.includes('check_out_time'));
 });
+
+test('migrasi 009 & 010 membuat tabel audit_log dan kolom deleted_at', () => {
+  const db = useTempDb();
+
+  const auditColumns = db.prepare(`PRAGMA table_info(audit_log)`).all().map(c => c.name).sort();
+  assert.deepEqual(auditColumns, [
+    'account_id', 'account_name', 'action', 'after_json', 'before_json',
+    'created_at', 'entity', 'entity_id', 'id', 'reason'
+  ]);
+
+  const employeeColumns = db.prepare(`PRAGMA table_info(employees)`).all().map(c => c.name);
+  assert.ok(employeeColumns.includes('deleted_at'));
+});

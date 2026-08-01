@@ -82,8 +82,13 @@ const Storage = {
       status: record.status,
       attendanceType: record.attendanceType,
       hoursWorked: record.hoursWorked,
-      note: record.note
+      note: record.note,
+      // Wajib saat mengubah absensi yang sudah tercatat, diabaikan saat baru
+      reason: record.reason
     });
+  },
+  async bulkMarkAttendance(date, employeeIds) {
+    return apiRequest('POST', '/api/attendance/bulk-mark', { date, employeeIds });
   },
   async getAttendanceHistory({ employeeId, month }) {
     const params = new URLSearchParams({ month });
@@ -152,6 +157,15 @@ const Storage = {
   },
   async confirmHoliday(date) {
     return apiRequest('PATCH', `/api/holidays/${date}/confirm`);
+  },
+
+  async getAuditLog(filter) {
+    const params = new URLSearchParams();
+    for (const key of ['entity', 'entityId', 'from', 'to', 'limit']) {
+      if (filter && filter[key]) params.set(key, filter[key]);
+    }
+    const query = params.toString();
+    return apiRequest('GET', `/api/audit-log${query ? `?${query}` : ''}`);
   },
 
   async recordCheckOut(employeeId, date) {

@@ -10,6 +10,7 @@
 const express = require('express');
 const db = require('../db');
 const { requireAuth, requireOwner } = require('../middleware/auth');
+const { recordAudit } = require('../auditLog');
 
 const router = express.Router();
 
@@ -71,6 +72,13 @@ function getById(id) {
   return db.prepare(`${SELECT_WITH_LOOKUPS} WHERE e.id = ?`).get(id);
 }
 
+/* Karyawan terhapus tidak boleh lagi jadi sasaran perubahan apa pun. Dipakai
+   semua route yang menyebut :id, supaya jawabannya seragam 404 dan bukan
+   diam-diam menulis ke baris yang sudah dianggap tidak ada. */
+function findLive(id) {
+  return db.prepare('SELECT id FROM employees WHERE id = ? AND deleted_at IS NULL').get(id);
+}
+
 /* Validasi bersama POST & PUT. `selfId` diisi saat PUT supaya karyawan
    yang sedang diubah tidak dianggap bentrok dengan kodenya sendiri.
    Mengembalikan string pesan error, atau null kalau semuanya sah. */
@@ -84,9 +92,18 @@ function validateEmployeeBody(body, selfId) {
   const code = String(employeeCode == null ? '' : employeeCode).trim();
   if (!code) return 'Employee ID wajib diisi.';
 
+  /* Karyawan terhapus TETAP diperiksa di sini. Kodenya masih memegang index
+     unik di database, jadi mengizinkannya lolos validasi hanya memindahkan
+     kegagalan ke lapisan SQL dengan pesan yang tidak bisa dibaca pengguna.
+     Kode karyawan memang pensiun permanen -- riwayat absensi lama masih
+     menunjuk ke sana, dan memakai ulang kodenya membuat laporan lampau
+     ambigu. */
   const clash = selfId
-    ? db.prepare('SELECT id FROM employees WHERE LOWER(employee_code) = ? AND id <> ?').get(code.toLowerCase(), selfId)
-    : db.prepare('SELECT id FROM employees WHERE LOWER(employee_code) = ?').get(code.toLowerCase());
+    ? db.prepare('SELECT id, name, deleted_at FROM employees WHERE LOWER(employee_code) = ? AND id <> ?').get(code.toLowerCase(), selfId)
+    : db.prepare('SELECT id, name, deleted_at FROM employees WHERE LOWER(employee_code) = ?').get(code.toLowerCase());
+  if (clash && clash.deleted_at) {
+    return `Employee ID "${code}" pernah dipakai ${clash.name} yang sudah dihapus, jadi tidak bisa dipakai lagi.`;
+  }
   if (clash) return `Employee ID "${code}" sudah dipakai karyawan lain.`;
 
   if (jobId != null && jobId !== '' && !db.prepare('SELECT id FROM jobs WHERE id = ?').get(jobId)) {
@@ -104,7 +121,7 @@ function normalizeLookupId(value) {
 }
 
 router.get('/', requireAuth, (req, res) => {
-  const rows = db.prepare(`${SELECT_WITH_LOOKUPS} ORDER BY e.name`).all();
+  const rows = db.prepare(`${SELECT_WITH_LOOKUPS} WHERE e.deleted_at IS NULL ORDER BY e.name`).all();
   const includeWage = req.session.role === 'owner';
   res.json(rows.map(r => toJson(r, includeWage)));
 });
@@ -140,12 +157,21 @@ router.post('/', requireOwner, (req, res) => {
     photoUpdatedAt
   );
 
-  res.status(201).json(toJson(getById(info.lastInsertRowid), true));
+  const created = getById(info.lastInsertRowid);
+  recordAudit(req.session, {
+    action: 'create',
+    entity: 'employee',
+    entityId: created.id,
+    before: null,
+    after: created
+  });
+  res.status(201).json(toJson(created, true));
 });
 
 router.put('/:id', requireOwner, (req, res) => {
-  const row = db.prepare('SELECT id FROM employees WHERE id = ?').get(req.params.id);
+  const row = findLive(req.params.id);
   if (!row) return res.status(404).json({ error: 'Karyawan tidak ditemukan.' });
+  const before = getById(row.id);
 
   const body = req.body || {};
   const error = validateEmployeeBody(body, row.id);
@@ -185,13 +211,22 @@ router.put('/:id', requireOwner, (req, res) => {
       .run(row.id);
   }
 
-  res.json(toJson(getById(row.id), true));
+  const updated = getById(row.id);
+  recordAudit(req.session, {
+    action: 'update',
+    entity: 'employee',
+    entityId: row.id,
+    before,
+    after: updated,
+    reason: req.body.reason
+  });
+  res.json(toJson(updated, true));
 });
 
 /* Tersedia untuk HR juga (requireAuth, bukan requireOwner): foto bukan data
    rahasia seperti upah, dan HR justru butuh untuk mengenali karyawan. */
 router.get('/:id/photo', requireAuth, (req, res) => {
-  const row = db.prepare('SELECT photo, photo_mime FROM employees WHERE id = ?').get(req.params.id);
+  const row = db.prepare('SELECT photo, photo_mime FROM employees WHERE id = ? AND deleted_at IS NULL').get(req.params.id);
   if (!row || !row.photo) return res.status(404).json({ error: 'Karyawan ini belum punya foto.' });
 
   res.set('Content-Type', row.photo_mime || 'image/jpeg');
@@ -201,10 +236,24 @@ router.get('/:id/photo', requireAuth, (req, res) => {
   res.send(Buffer.from(row.photo));
 });
 
+/* Soft delete. Menghapus permanen akan menyisakan baris absensi yatim yang
+   tetap ikut terhitung di laporan gaji, karena foreign key memang sengaja
+   dimatikan di db.js. Barisnya tetap ada, hanya hilang dari daftar. */
 router.delete('/:id', requireOwner, (req, res) => {
-  const row = db.prepare('SELECT id FROM employees WHERE id = ?').get(req.params.id);
+  const row = findLive(req.params.id);
   if (!row) return res.status(404).json({ error: 'Karyawan tidak ditemukan.' });
-  db.prepare('DELETE FROM employees WHERE id = ?').run(req.params.id);
+
+  const before = getById(row.id);
+  db.prepare('UPDATE employees SET deleted_at = ? WHERE id = ?').run(Date.now(), row.id);
+
+  recordAudit(req.session, {
+    action: 'delete',
+    entity: 'employee',
+    entityId: row.id,
+    before,
+    after: null,
+    reason: (req.body || {}).reason
+  });
   res.json({ ok: true });
 });
 

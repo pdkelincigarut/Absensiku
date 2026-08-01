@@ -10,6 +10,7 @@ const express = require('express');
 const db = require('../db');
 const { requireOwner } = require('../middleware/auth');
 const { timeToMinutes } = require('../scheduleResolver');
+const { recordAudit } = require('../auditLog');
 
 const router = express.Router();
 
@@ -79,7 +80,7 @@ router.put('/', requireOwner, (req, res) => {
   if (employeeIds === null || employeeIds === undefined) {
     targets = [null];
   } else if (Array.isArray(employeeIds) && employeeIds.length > 0) {
-    const known = new Set(db.prepare('SELECT id FROM employees').all().map(r => r.id));
+    const known = new Set(db.prepare('SELECT id FROM employees WHERE deleted_at IS NULL').all().map(r => r.id));
     for (const id of employeeIds) {
       if (!known.has(Number(id))) {
         return res.status(404).json({ error: `Karyawan dengan id ${id} tidak ditemukan.` });
@@ -97,7 +98,13 @@ router.put('/', requireOwner, (req, res) => {
   `);
   const now = Date.now();
   for (const target of targets) {
-    insert.run(target, cleanDays, startTime, endTime, effectiveFrom, now);
+    const info = insert.run(target, cleanDays, startTime, endTime, effectiveFrom, now);
+    recordAudit(req.session, {
+      action: 'create', entity: 'work_schedule', entityId: info.lastInsertRowid,
+      before: null,
+      after: db.prepare('SELECT * FROM work_schedules WHERE id = ?').get(info.lastInsertRowid),
+      createdAt: now
+    });
   }
 
   res.json({ ok: true, saved: targets.length });
@@ -117,6 +124,12 @@ router.delete('/:id', requireOwner, (req, res) => {
   }
 
   db.prepare('DELETE FROM work_schedules WHERE id = ?').run(row.id);
+  // Menghapus satu versi jadwal mengubah gaji periode lampau yang memakainya.
+  // before_json di sini satu-satunya cara mengembalikannya.
+  recordAudit(req.session, {
+    action: 'delete', entity: 'work_schedule', entityId: row.id,
+    before: row, after: null, reason: (req.body || {}).reason
+  });
   res.json({ ok: true });
 });
 

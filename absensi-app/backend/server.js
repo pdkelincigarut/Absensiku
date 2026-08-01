@@ -41,6 +41,7 @@ app.use('/api/holidays', require('./routes/holidays'));
 app.use('/api/attendance', require('./routes/attendance'));
 app.use('/api/payroll', require('./routes/payroll'));
 app.use('/api/late-policies', require('./routes/latePolicies'));
+app.use('/api/audit-log', require('./routes/auditLog'));
 
 app.use(express.static(path.join(__dirname, '..', 'frontend')));
 
