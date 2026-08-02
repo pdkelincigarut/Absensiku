@@ -20,14 +20,22 @@ const bcrypt = require('bcryptjs');
 const db = require('./db');
 const { nationalHolidays } = require('./holidayCalculator');
 
-if (!process.argv.includes('--force')) {
+/* --topup tidak menghapus apa pun, jadi tidak perlu --force. Yang dijaga di
+   sini khusus mode bangun ulang. */
+if (!process.argv.includes('--force') && !process.argv.includes('--topup')) {
   console.error(`
-seedDemo MENGHAPUS SEMUA ISI DATABASE lalu menggantinya dengan data contoh.
+seedDemo punya dua mode.
 
-Database yang akan dikosongkan:
-  ${process.env.DB_FILE || 'data/absensiku.db'}
+  --topup   Menambal hari kerja yang belum terisi sampai kemarin.
+            Tidak menghapus apa pun. Pakai ini sebelum presentasi di
+            hari lain, supaya karyawan tidak terlihat Alpa massal.
 
-Kalau itu memang yang kamu mau, ulangi dengan:
+  --force   MENGHAPUS SEMUA ISI DATABASE lalu membangun ulang data contoh
+            dari awal. Database yang akan dikosongkan:
+              ${process.env.DB_FILE || 'data/absensiku.db'}
+
+Contoh:
+  npm run seed:demo -- --topup
   npm run seed:demo -- --force
 `);
   process.exit(1);
@@ -276,7 +284,7 @@ function buildRecord(emp, dateStr, startTime) {
   };
 }
 
-function seedAttendance(employees, scheduleInfo, holidayDates, accounts) {
+function seedAttendance(employees, scheduleInfo, holidayDates, accounts, from, to) {
   const insert = db.prepare(`
     INSERT INTO attendance (employee_id, date, status, attendance_type, hours_worked, check_in_time, check_out_time, note, marked_by, updated_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -287,8 +295,8 @@ function seedAttendance(employees, scheduleInfo, holidayDates, accounts) {
     const sched = scheduleFor(emp, scheduleInfo);
     const workDays = sched.workDays.split(',').map(Number);
 
-    let cursor = HISTORY_START;
-    while (cursor <= HISTORY_END) {
+    let cursor = from;
+    while (cursor <= to) {
       const isWorkday = workDays.includes(dayOfWeek(cursor)) && !holidayDates.has(cursor);
       if (isWorkday) {
         const rec = buildRecord(emp, cursor, sched.start);
@@ -380,7 +388,52 @@ function seedAuditLog(employees, holidays, revisedPolicyEmployee, accounts) {
 
 /* ---------------- Jalankan ---------------- */
 
-function run() {
+/* Menyusun ulang keterangan jadwal dari isi database, supaya --topup tidak
+   perlu menulis ulang tabel jadwal yang sudah ada. */
+function readScheduleInfo(employees) {
+  const rows = db.prepare('SELECT * FROM work_schedules WHERE employee_id IS NOT NULL').all();
+  const byId = new Map(employees.map(e => [e.id, e]));
+  return {
+    exceptions: rows
+      .filter(r => byId.has(r.employee_id))
+      .map(r => ({ employee: byId.get(r.employee_id).name, workDays: r.work_days, start: r.start_time })),
+    byName: new Map(employees.map(e => [e.name, e]))
+  };
+}
+
+/* Data demo memakai tanggal sungguhan, jadi ia membusuk sehari sekali:
+   hari kerja yang terlewat tanpa catatan langsung terhitung Alpa untuk
+   semua orang. Mode ini menambal hari-hari yang belum terisi tanpa
+   menyentuh apa pun yang sudah ada, supaya demo yang dipakai berhari-hari
+   tidak perlu dibangun ulang dari nol. */
+function topup() {
+  const employees = db.prepare('SELECT id, name FROM employees WHERE deleted_at IS NULL ORDER BY id').all();
+  if (employees.length === 0) {
+    console.error('Belum ada data demo. Jalankan dulu: npm run seed:demo -- --force');
+    process.exit(1);
+  }
+
+  const last = db.prepare('SELECT MAX(date) AS d FROM attendance').get().d;
+  if (!last) {
+    console.error('Belum ada riwayat absensi. Jalankan dulu: npm run seed:demo -- --force');
+    process.exit(1);
+  }
+
+  const from = addDaysStr(last, 1);
+  const to = addDaysStr(TODAY, -1); // hari ini tetap dibiarkan kosong
+  if (from > to) {
+    console.log(`\nData demo sudah mutakhir (terisi sampai ${last}). Tidak ada yang perlu ditambah.\n`);
+    return;
+  }
+
+  const holidayDates = new Set(db.prepare('SELECT date FROM holidays').all().map(r => r.date));
+  const accounts = { hr: { accountId: 1, name: db.prepare('SELECT name FROM accounts WHERE role = ?').get('hr').name } };
+  const added = seedAttendance(employees, readScheduleInfo(employees), holidayDates, accounts, from, to);
+
+  console.log(`\nData demo ditambal: ${added} baris absensi baru (${from} s/d ${to}).\n`);
+}
+
+function rebuild() {
   const now = Date.now();
 
   wipe();
@@ -392,7 +445,7 @@ function run() {
   const revised = seedLatePolicies(employees, now);
   const holidays = seedHolidays(now);
   const holidayDates = new Set(holidays.map(h => h.date));
-  const attendanceCount = seedAttendance(employees, scheduleInfo, holidayDates, accounts);
+  const attendanceCount = seedAttendance(employees, scheduleInfo, holidayDates, accounts, HISTORY_START, HISTORY_END);
   const auditCount = seedAuditLog(employees, holidays, revised, accounts);
 
   console.log(`
@@ -410,7 +463,10 @@ Data demo siap.
 
   Hari ini (${TODAY}) sengaja dibiarkan kosong supaya tab Monitoring
   bisa diperagakan langsung dari keadaan belum diabsen.
+
+  Sebelum presentasi di hari lain, jalankan: npm run seed:demo -- --topup
 `);
 }
 
-run();
+if (process.argv.includes('--topup')) topup();
+else rebuild();
