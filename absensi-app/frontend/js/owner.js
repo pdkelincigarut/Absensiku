@@ -1,6 +1,7 @@
 /* ============================================================
    owner.js — Dashboard Owner/Admin
-   Tabs: Monitoring | Data Karyawan | Riwayat | Laporan Gaji
+   Tabs: Monitoring | Data Karyawan | Keterlambatan | Jabatan & Divisi
+         | Jadwal & Libur | Riwayat Absensi | Laporan Gaji | Log Perubahan
    Monitoring & Riwayat memakai komponen bersama dari checklist.js.
    Perhitungan gaji dilakukan di server (routes/payroll.js) — di
    sini hanya kalkulasi tanggal murni (getPeriodByOffset/periodLabel)
@@ -67,10 +68,15 @@ async function renderOwnerDashboard(account) {
             <button id="btn-logout" class="text-sm font-medium text-rose-600 hover:text-rose-700 px-3 py-1.5 rounded-lg hover:bg-rose-50 transition">Keluar</button>
           </div>
         </div>
-        <nav class="max-w-5xl mx-auto px-4 flex gap-1 overflow-x-auto no-scrollbar pb-2">
-          ${tabButton('monitoring', 'Monitoring Hari Ini')}
+        <!-- flex-wrap, bukan overflow-x-auto: kedelapan tab tidak muat di lebar
+             kartu, dan menggesernya ke samping menyembunyikan tab terakhir tanpa
+             petunjuk apa pun -- di layar proyektor tab itu seolah tidak ada.
+             Membungkus ke baris kedua membuat header sedikit lebih tinggi, tapi
+             tidak pernah ada menu yang hilang. -->
+        <nav class="max-w-5xl mx-auto px-4 flex flex-wrap gap-1 pb-2">
+          ${tabButton('monitoring', 'Monitoring')}
           ${tabButton('karyawan', 'Data Karyawan')}
-          ${tabButton('keterlambatan', 'Aturan Keterlambatan')}
+          ${tabButton('keterlambatan', 'Keterlambatan')}
           ${tabButton('lookup', 'Jabatan &amp; Divisi')}
           ${tabButton('jadwal', 'Jadwal &amp; Libur')}
           ${tabButton('riwayat', 'Riwayat Absensi')}
@@ -107,14 +113,14 @@ async function renderOwnerDashboard(account) {
 
 function tabButton(id, label) {
   const active = OwnerState.tab === id;
-  return `<button data-tab="${id}" class="tab-btn whitespace-nowrap px-4 py-2 text-sm font-medium rounded-t-lg border-b-2 transition ${active ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-700'}">${label}</button>`;
+  return `<button data-tab="${id}" class="tab-btn whitespace-nowrap px-3 py-2 text-sm font-medium rounded-t-lg border-b-2 transition ${active ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-700'}">${label}</button>`;
 }
 
 async function renderOwnerTab() {
   clearInterval(OwnerState.monitorTimer);
   document.querySelectorAll('.tab-btn').forEach(btn => {
     const active = btn.dataset.tab === OwnerState.tab;
-    btn.className = `tab-btn whitespace-nowrap px-4 py-2 text-sm font-medium rounded-t-lg border-b-2 transition ${active ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`;
+    btn.className = `tab-btn whitespace-nowrap px-3 py-2 text-sm font-medium rounded-t-lg border-b-2 transition ${active ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`;
   });
 
   let employees;
