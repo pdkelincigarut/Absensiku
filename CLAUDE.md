@@ -36,11 +36,13 @@ Bagian ini memisahkan **yang sudah jalan di kode** dari **yang masih rencana**. 
 | Audit log | Tabel `audit_log`, tab "Log Perubahan" khusus Owner, snapshot sebelum/sesudah tiap perubahan |
 | Koreksi wajib beralasan | `reason` wajib saat mengubah absensi yang sudah tercatat, opsional saat input pertama |
 | Soft delete karyawan | `employees.deleted_at`; laporan gaji periode lampau tidak bergeser |
+| Export CSV | Laporan gaji (`owner.js`) dan daftar karyawan (`employeeList.js`), dibuat di browser pakai Blob + BOM UTF-8 supaya rapi dibuka Excel |
+| Data demo | `seedDemo.js` — riwayat sebulan lebih untuk presentasi, terpisah dari `seed.js` |
 
 ### Belum Dikerjakan (Roadmap)
 
-1. **Export rekap Excel/PDF** per periode, format siap dipakai payroll.
-   Belum ada sama sekali — tidak ada dependency export, tidak ada endpoint. Perlu keputusan: generate di server (nambah dependency) atau di browser.
+1. **Export PDF** per periode dengan tata letak siap serah.
+   CSV **sudah ada** untuk laporan gaji dan daftar karyawan, dan sudah bisa dibuka Excel. Yang belum: PDF, dan tata letak resmi (kop, tanda tangan, ringkasan per divisi). Perlu keputusan: dibuat di server (nambah dependency) atau lewat cetak browser.
 2. **Reminder/notifikasi** untuk karyawan yang belum absen.
    Belum ada scheduler, dan kanalnya (email/WA/push) belum dipilih. Perlu diingat karyawan tidak punya akun di aplikasi ini.
 3. **Versi & penghapusan `work_schedules` / `late_policies`.**
@@ -129,7 +131,7 @@ docs/superpowers/
 
 Logika perhitungan dipisah ke modul murni supaya gampang di-test tanpa DB. Jangan taruh query SQL di sini:
 - `scheduleResolver.js` — resolusi jadwal kerja berlaku pada tanggal tertentu, helper tanggal (`addDaysStr`, `dayOfWeek`)
-- `lateCalculator.js` — hitung menit telat & potongan
+- `lateCalculator.js` — hitung potongan (`computeDeduction`). **Catatan:** `computeLateMinutes` di sini versi lama 2-parameter yang mengabaikan toleransi; yang dipakai payroll adalah versi 3-parameter di `scheduleResolver.js`. Jangan tertukar.
 - `holidayCalculator.js` — hitung tanggal libur nasional (Imlek/Idul Fitri/Idul Adha/Kemerdekaan) via `Intl.DateTimeFormat`
 
 `auditLog.js` di root backend **bukan** modul murni — dia menyentuh DB. Isinya `recordAudit()` dan `hasMeaningfulChange()`.
@@ -167,7 +169,12 @@ Semua command backend dijalankan dari `absensi-app/backend/`:
 
 ```bash
 npm install          # sekali di awal
-npm run seed         # isi data demo — akun hradmin/hr123 (HR) & owner/owner123 (Owner)
+npm run seed         # data awal bersih untuk pemasangan asli (idempotent)
+
+# Data contoh untuk presentasi -- MENGHAPUS seluruh isi database:
+npm run seed:demo -- --force    # bangun ulang dari awal
+npm run seed:demo -- --topup    # tambal hari kerja yang terlewat, tidak menghapus apa pun
+
 npm start            # jalankan server -> http://localhost:3000 (API + frontend sekaligus)
 npm test             # semua test: node --test "test/*.test.js"
 

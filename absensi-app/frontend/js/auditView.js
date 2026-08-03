@@ -7,7 +7,9 @@
 const AuditState = {
   entity: '',
   from: '',
-  to: ''
+  to: '',
+  // id karyawan -> nama, supaya log bisa menyebut orangnya, bukan nomornya
+  employeeNames: new Map()
 };
 
 const AUDIT_ENTITY_LABEL = {
@@ -56,15 +58,51 @@ const AUDIT_FIELD_LABEL = {
   effective_from: 'Berlaku sejak',
   grace_minutes: 'Toleransi (menit)',
   threshold_minutes: 'Ambang potongan (menit)',
-  deduction_type: 'Jenis potongan'
+  deduction_type: 'Jenis potongan',
+  deduction_flat_amount: 'Potongan tetap',
+  deduction_per_minute_amount: 'Potongan per menit',
+  deduction_percentage: 'Potongan (persen)',
+  employee_id: 'Karyawan',
+  job_id: 'Jabatan',
+  organization_id: 'Divisi',
+  is_seeded: 'Bawaan sistem'
 };
 
 function auditFieldLabel(key) {
   return AUDIT_FIELD_LABEL[key] || key;
 }
 
-function auditValueText(value) {
+/* Nilai mentah dari database sering tidak terbaca manusia: id karyawan,
+   0/1 untuk ya-tidak, dan tanggal berupa milidetik epoch. */
+function auditValueDisplay(key, value) {
   if (value === null || value === undefined || value === '') return '—';
+  if (key === 'employee_id') {
+    const nama = AuditState.employeeNames.get(Number(value));
+    return nama || `#${value}`;
+  }
+  if (['active', 'is_estimate', 'is_seeded'].includes(key)) return value ? 'Ya' : 'Tidak';
+  if (key === 'deleted_at') return formatWaktuLog(Number(value));
+  if (['daily_wage', 'deduction_flat_amount', 'deduction_per_minute_amount'].includes(key)) {
+    return 'Rp' + Number(value).toLocaleString('id-ID');
+  }
+  if (['date', 'birth_date', 'effective_from'].includes(key)) {
+    // effective_from bawaan migrasi memakai 1970-01-01 sebagai penanda
+    // "berlaku sejak awal", bukan tanggal sungguhan.
+    return value === '1970-01-01' ? 'Sejak awal' : formatTanggalIndo(String(value));
+  }
+  if (key === 'deduction_type') {
+    return { flat: 'Potongan tetap', per_minute: 'Per menit telat', percentage: 'Persentase gaji' }[value] || value;
+  }
+  if (key === 'status') {
+    return { hadir: 'Hadir', izin: 'Izin', sakit: 'Sakit', alpa: 'Alpa' }[value] || value;
+  }
+  if (key === 'attendance_type') {
+    return { full: 'Sehari penuh', half: 'Setengah hari', custom: 'Jam tertentu' }[value] || value;
+  }
+  if (key === 'work_days') {
+    const nama = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
+    return String(value).split(',').map(n => nama[Number(n)]).join(', ');
+  }
   return String(value);
 }
 
@@ -119,6 +157,12 @@ function renderDiff(before, after) {
 
   if (keys.length === 0) return '';
 
+  /* Penambahan dan penghapusan tidak punya sisi pembanding, jadi kolom
+     "sebelum"-nya akan berisi strip di setiap baris. Satu kolom nilai saja
+     lebih terbaca daripada satu kolom penuh tanda hubung. */
+  const oneSided = !before || !after;
+  const source = before || after;
+
   return `
     <div class="mt-2 border border-slate-200 rounded-lg overflow-hidden">
       <table class="w-full text-xs">
@@ -126,14 +170,45 @@ function renderDiff(before, after) {
           ${keys.map(key => `
             <tr class="border-b border-slate-100 last:border-0">
               <td class="px-3 py-1.5 text-slate-500 w-40 align-top">${escapeHtml(auditFieldLabel(key))}</td>
-              <td class="px-3 py-1.5 text-slate-400 line-through align-top">${escapeHtml(auditValueText(before && before[key]))}</td>
-              <td class="px-3 py-1.5 text-slate-700 font-medium align-top">${escapeHtml(auditValueText(after && after[key]))}</td>
+              ${oneSided ? `
+                <td class="px-3 py-1.5 align-top ${before ? 'text-slate-400 line-through' : 'text-slate-700 font-medium'}">${escapeHtml(auditValueDisplay(key, source[key]))}</td>
+              ` : `
+                <td class="px-3 py-1.5 text-slate-400 line-through align-top">${escapeHtml(auditValueDisplay(key, before[key]))}</td>
+                <td class="px-3 py-1.5 text-slate-700 font-medium align-top">${escapeHtml(auditValueDisplay(key, after[key]))}</td>
+              `}
             </tr>
           `).join('')}
         </tbody>
       </table>
     </div>
   `;
+}
+
+/* "Absensi #111" tidak berarti apa-apa bagi owner. Nama orang dan tanggalnya
+   diambil dari isi snapshot, yang memang sudah tersimpan utuh. */
+function entrySubject(entry, entityLabel) {
+  const data = entry.after || entry.before || {};
+
+  if (entry.entity === 'attendance') {
+    const nama = AuditState.employeeNames.get(Number(data.employee_id));
+    const tanggal = data.date ? formatTanggalIndo(data.date) : '';
+    if (nama && tanggal) return `Absensi ${nama} · ${tanggal}`;
+    if (tanggal) return `Absensi ${tanggal}`;
+  }
+  if (entry.entity === 'employee' && data.name) return `Karyawan ${data.name}`;
+  if (entry.entity === 'holiday') {
+    const tanggal = data.date ? formatTanggalIndo(data.date) : entry.entityId;
+    return data.name ? `${data.name} · ${tanggal}` : `Hari libur ${tanggal}`;
+  }
+  if ((entry.entity === 'late_policy' || entry.entity === 'work_schedule') && data.employee_id) {
+    const nama = AuditState.employeeNames.get(Number(data.employee_id));
+    if (nama) return `${entityLabel} · ${nama}`;
+  }
+  if (entry.entity === 'work_schedule' && !data.employee_id) return 'Jadwal baku perusahaan';
+  if ((entry.entity === 'jobs' || entry.entity === 'organizations') && data.name) {
+    return `${entityLabel} ${data.name}`;
+  }
+  return `${entityLabel} #${entry.entityId}`;
 }
 
 function renderAuditRow(group) {
@@ -143,7 +218,7 @@ function renderAuditRow(group) {
 
   const subject = group.kind === 'bulk'
     ? escapeHtml(bulkSummary(entry.action, group.members.length))
-    : `${entityLabel} #${escapeHtml(entry.entityId)}`;
+    : escapeHtml(entrySubject(entry, entityLabel));
 
   return `
     <div class="border border-slate-200 rounded-xl bg-white p-4">
@@ -227,6 +302,20 @@ async function renderAuditTab() {
 async function loadAuditList() {
   const listEl = document.getElementById('audit-list');
   if (!listEl) return;
+
+  /* Dimuat sekali, bukan per baris log: satu daftar karyawan cukup untuk
+     menerjemahkan semua employee_id yang muncul. Karyawan yang sudah dihapus
+     tidak ada di daftar ini, dan itu memang salah satu alasan nama ikut
+     disalin ke dalam snapshot. */
+  if (AuditState.employeeNames.size === 0) {
+    try {
+      const employees = await Storage.getEmployees();
+      AuditState.employeeNames = new Map(employees.map(e => [e.id, e.name]));
+    } catch (err) {
+      // Gagal memuat nama bukan alasan menyembunyikan seluruh log --
+      // entrySubject() jatuh kembali ke nomor id.
+    }
+  }
 
   let entries;
   try {
