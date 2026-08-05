@@ -4,7 +4,39 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>AbsensiKu — Absensi &amp; Penggajian Karyawan</title>
+
+  <!-- Poppins (header) & IBM Plex Mono (sub) sesuai panduan merek KLC.
+       Kalau server kantor tanpa internet, font gagal dimuat dan turun ke
+       font sistem -- tata letak tetap utuh, hanya hurufnya berbeda.
+       Catatan: Tailwind juga sudah dari CDN, jadi ketergantungan internet
+       ini bukan hal baru. -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+
   <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    /* Warna diambil langsung dari mockup dan readme aset, bukan ditebak:
+       merah latar #be0000 (sama persis dengan latar berkas logo, sehingga
+       logo menyatu tanpa jahitan) dan merah tua #b31b32 untuk tombol serta
+       elemen aktif. Keluarga font sengaja ditambah sebagai nama baru
+       (display/plex), bukan menimpa `sans`/`mono` bawaan, supaya tampilan
+       dashboard yang sudah jadi tidak ikut berubah. */
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            klc: { red: '#be0000', crimson: '#b31b32', 'crimson-dark': '#96162a' }
+          },
+          fontFamily: {
+            display: ['Poppins', 'Segoe UI', 'system-ui', 'sans-serif'],
+            plex: ['"IBM Plex Mono"', 'ui-monospace', 'Consolas', 'monospace']
+          }
+        }
+      }
+    };
+  </script>
+
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
   </style>
