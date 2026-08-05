@@ -1,6 +1,6 @@
 /* ============================================================
    routes/payroll.js — Laporan gaji (dipindah dari owner.js lama)
-   Periode 27 bulan lalu s/d 26 bulan berjalan; upah = (min(jam,8)/8)
+   Periode 28 bulan lalu s/d 27 bulan berjalan; upah = (min(jam,8)/8)
    x upah harian per hari status hadir. Owner only.
    ============================================================ */
 
@@ -29,12 +29,26 @@ function addDaysStr(dateStr, n) {
   return dateToStr(dt);
 }
 
+/* Batas periode gaji. Hari pertama yang dihitung tanggal 28, hari terakhir
+   tanggal 27 bulan berikutnya.
+
+   Kedua angka WAJIB digeser bersama dan harus selalu berselisih satu hari.
+   Kalau tidak, akan ada tanggal yang masuk dua periode sekaligus (dibayar
+   dua kali) atau tidak masuk periode mana pun (tidak dibayar).
+
+   Nilai yang sama diduplikasi di frontend `owner.js`, di `seedDemo.js`, dan
+   di `test/payroll.schedule.test.js` -- frontend disajikan tanpa build step
+   sehingga tidak ada modul yang bisa dipakai bersama. Mengubah di sini saja
+   akan membuat label di layar tidak cocok dengan angkanya. */
+const PERIOD_START_DAY = 28;
+const PERIOD_END_DAY = 27;
+
 function getPeriodByOffset(offset) {
   const now = new Date();
   let year = now.getFullYear();
   let month = now.getMonth();
   const day = now.getDate();
-  let startMonth = day >= 27 ? month : month - 1;
+  let startMonth = day >= PERIOD_START_DAY ? month : month - 1;
   let startYear = year;
   if (startMonth < 0) { startMonth = 11; startYear--; }
 
@@ -42,10 +56,10 @@ function getPeriodByOffset(offset) {
   while (startMonth < 0) { startMonth += 12; startYear--; }
   while (startMonth > 11) { startMonth -= 12; startYear++; }
 
-  const start = new Date(startYear, startMonth, 27);
+  const start = new Date(startYear, startMonth, PERIOD_START_DAY);
   let endMonth = startMonth + 1, endYear = startYear;
   if (endMonth > 11) { endMonth = 0; endYear++; }
-  const end = new Date(endYear, endMonth, 26);
+  const end = new Date(endYear, endMonth, PERIOD_END_DAY);
   return { start, end, offset };
 }
 
@@ -70,6 +84,25 @@ function toLatePolicyJson(policy) {
     effectiveFrom: policy.effectiveFrom
   };
 }
+
+/* Berapa periode ke belakang yang masih masuk akal ditawarkan. Periode dari
+   sebelum aplikasi ini mulai dipakai tidak punya satu pun catatan absensi,
+   sehingga laporannya menampilkan seluruh karyawan Alpa sebulan penuh --
+   angka yang bukan cuma tidak berguna, tapi menyesatkan. */
+router.get('/periods', requireOwner, (req, res) => {
+  const earliest = db.prepare('SELECT MIN(date) AS d FROM attendance').get().d;
+  if (!earliest) return res.json({ earliest: null, oldestOffset: 0 });
+
+  /* Yang dibandingkan AWAL periode, bukan akhirnya. Periode yang cuma
+     tertutup sebagian tetap menampilkan Alpa untuk hari-hari sebelum
+     pencatatan dimulai, jadi tidak layak ditawarkan sama sekali.
+     Batas 120 supaya tetap berhenti kalau ada tanggal absensi yang aneh. */
+  let oldestOffset = 0;
+  while (oldestOffset > -120 && dateToStr(getPeriodByOffset(oldestOffset - 1).start) >= earliest) {
+    oldestOffset--;
+  }
+  res.json({ earliest, oldestOffset });
+});
 
 router.get('/', requireOwner, (req, res) => {
   const offset = Number(req.query.periodOffset || 0);

@@ -32,7 +32,7 @@ Bagian ini memisahkan **yang sudah jalan di kode** dari **yang masih rencana**. 
 | Jadwal kerja berversi | `work_schedules` + `effective_from`, ada jadwal baku perusahaan |
 | Hari libur | Input manual + auto-generate 4 libur nasional (Imlek, Idul Fitri, Idul Adha, Kemerdekaan) dengan flag `is_estimate` |
 | Aturan keterlambatan | Berversi, per karyawan, potongan flat / per-menit / persentase |
-| Laporan gaji | Periode 27 bulan lalu s/d 26 bulan berjalan, sudah hitung potongan telat |
+| Laporan gaji | Periode 28 bulan lalu s/d 27 bulan berjalan, sudah hitung potongan telat |
 | Audit log | Tabel `audit_log`, tab "Log Perubahan" khusus Owner, snapshot sebelum/sesudah tiap perubahan |
 | Koreksi wajib beralasan | `reason` wajib saat mengubah absensi yang sudah tercatat, opsional saat input pertama |
 | Soft delete karyawan | `employees.deleted_at`; laporan gaji periode lampau tidak bergeser |
@@ -161,7 +161,7 @@ Semua di-mount di `server.js`, prefix `/api`:
 - **Jangan pernah** parsing string `'YYYY-MM-DD'` langsung ke `new Date(str)` — dianggap UTC dan bisa geser satu hari di WIB. Selalu pecah dulu lalu `new Date(y, m - 1, d)`.
 - **Jam dari server, bukan dari client.** Frontend tidak pernah mengirim `checkInTime`/`checkOutTime`; server yang mengisi (lihat komentar di `storage.js`). Ini bagian dari anti-fraud.
 - Semua akses API dari frontend lewat `Storage` di `storage.js` — jangan `fetch()` langsung dari file view.
-- Periode payroll: **tanggal 27 bulan lalu s/d 26 bulan berjalan**, dipilih lewat query `?periodOffset=N` (0 = periode berjalan).
+- Periode payroll: **tanggal 28 bulan lalu s/d 27 bulan berjalan**, dipilih lewat query `?periodOffset=N` (0 = periode berjalan). Batasnya ada di konstanta `PERIOD_START_DAY`/`PERIOD_END_DAY`, **diduplikasi di 4 berkas** (`routes/payroll.js`, `frontend/js/owner.js`, `seedDemo.js`, `test/payroll.schedule.test.js`) karena frontend tanpa build step. Ubah keempatnya bersama, dan jaga selisihnya tetap satu hari.
 
 ## Command yang Sering Dipakai
 

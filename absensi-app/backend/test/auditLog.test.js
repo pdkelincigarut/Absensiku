@@ -222,7 +222,7 @@ test('laporan gaji periode berjalan tidak berubah setelah karyawannya dihapus', 
   const previous = currentSession;
   currentSession = { accountId: 2, role: 'owner', name: 'Pak Owner' };
   try {
-    // Tanggal di dalam periode berjalan (27 bulan lalu s/d 26 bulan berjalan)
+    // Tanggal di dalam periode berjalan (28 bulan lalu s/d 27 bulan berjalan)
     // dan tidak di masa depan, supaya benar-benar ikut dihitung.
     const today = new Date();
     const inPeriod = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1);

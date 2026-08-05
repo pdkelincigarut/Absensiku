@@ -7,16 +7,19 @@ let db, server, port;
 const pad2 = n => String(n).padStart(2, '0');
 const dateToStr = d => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 
-/* Periode gaji 27 bulan lalu s/d 26 bulan berjalan — disalin dari payroll.js
+/* Periode gaji 28 bulan lalu s/d 27 bulan berjalan — disalin dari payroll.js
    supaya test bisa menghitung ekspektasinya sendiri.
 
    offset -1 dipakai untuk kasus yang butuh periode UTUH di masa lampau:
    periode berjalan bisa saja baru berumur beberapa hari (mis. tanggal 31
-   berarti periode baru jalan 27-30) sehingga belum tentu memuat hari Minggu. */
+   berarti periode baru jalan 28-30) sehingga belum tentu memuat hari Minggu. */
+const PERIOD_START_DAY = 28;
+const PERIOD_END_DAY = 27;
+
 function periodByOffset(offset) {
   const now = new Date();
   const day = now.getDate();
-  let startMonth = day >= 27 ? now.getMonth() : now.getMonth() - 1;
+  let startMonth = day >= PERIOD_START_DAY ? now.getMonth() : now.getMonth() - 1;
   let startYear = now.getFullYear();
   if (startMonth < 0) { startMonth = 11; startYear--; }
 
@@ -24,10 +27,10 @@ function periodByOffset(offset) {
   while (startMonth < 0) { startMonth += 12; startYear--; }
   while (startMonth > 11) { startMonth -= 12; startYear++; }
 
-  const start = new Date(startYear, startMonth, 27);
+  const start = new Date(startYear, startMonth, PERIOD_START_DAY);
   let endMonth = startMonth + 1, endYear = startYear;
   if (endMonth > 11) { endMonth = 0; endYear++; }
-  return { start, end: new Date(endYear, endMonth, 26) };
+  return { start, end: new Date(endYear, endMonth, PERIOD_END_DAY) };
 }
 
 const currentPeriod = () => periodByOffset(0);

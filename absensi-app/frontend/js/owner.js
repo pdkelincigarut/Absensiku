@@ -25,12 +25,19 @@ function dateToStr(d) {
   return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
 }
 
+/* Harus sama persis dengan PERIOD_START_DAY / PERIOD_END_DAY di
+   backend/routes/payroll.js. Frontend disajikan tanpa build step, jadi tidak
+   ada modul yang bisa dipakai bersama; kalau berbeda, pilihan periode di
+   layar akan menunjuk rentang yang berbeda dari yang dihitung server. */
+const PERIOD_START_DAY = 28;
+const PERIOD_END_DAY = 27;
+
 function getPeriodByOffset(offset) {
   const now = new Date();
   let year = now.getFullYear();
   let month = now.getMonth();
   const day = now.getDate();
-  let startMonth = day >= 27 ? month : month - 1;
+  let startMonth = day >= PERIOD_START_DAY ? month : month - 1;
   let startYear = year;
   if (startMonth < 0) { startMonth = 11; startYear--; }
 
@@ -38,10 +45,10 @@ function getPeriodByOffset(offset) {
   while (startMonth < 0) { startMonth += 12; startYear--; }
   while (startMonth > 11) { startMonth -= 12; startYear++; }
 
-  const start = new Date(startYear, startMonth, 27);
+  const start = new Date(startYear, startMonth, PERIOD_START_DAY);
   let endMonth = startMonth + 1, endYear = startYear;
   if (endMonth > 11) { endMonth = 0; endYear++; }
-  const end = new Date(endYear, endMonth, 26);
+  const end = new Date(endYear, endMonth, PERIOD_END_DAY);
   return { start, end, offset };
 }
 
@@ -368,23 +375,36 @@ function renderRiwayatTab(employees) {
 
 /* ---------------- Tab: Laporan Gaji ---------------- */
 
-function renderLaporanTab() {
+async function renderLaporanTab() {
   const container = document.getElementById('owner-content');
 
+  /* Hanya periode yang benar-benar punya catatan absensi yang ditawarkan.
+     Menawarkan bulan dari sebelum aplikasi dipakai akan menampilkan seluruh
+     karyawan Alpa sebulan penuh -- pembaca menyimpulkan orangnya bolos,
+     padahal datanya memang belum pernah ada. */
+  let oldestOffset = 0;
+  try {
+    ({ oldestOffset } = await Storage.getPayrollPeriods());
+  } catch (err) {
+    // Gagal mengambil batas bukan alasan menyembunyikan laporan; jatuh
+    // kembali ke periode berjalan saja.
+  }
+  if (OwnerState.periodOffset < oldestOffset) OwnerState.periodOffset = 0;
+
   const periodOptions = [];
-  for (let i = 0; i >= -11; i--) periodOptions.push(getPeriodByOffset(i));
+  for (let i = 0; i >= oldestOffset; i--) periodOptions.push(getPeriodByOffset(i));
 
   container.innerHTML = `
     <div class="flex flex-col sm:flex-row sm:items-center gap-3 mb-4">
       <div class="flex-1">
-        <label class="text-sm text-slate-500 block mb-1">Periode Penggajian (27 &ndash; 26)</label>
+        <label class="text-sm text-slate-500 block mb-1">Periode Penggajian (${PERIOD_START_DAY} &ndash; ${PERIOD_END_DAY})</label>
         <select id="filter-period" class="border border-slate-300 rounded-lg px-3 py-1.5 text-sm w-full sm:w-96">
           ${periodOptions.map(p => `<option value="${p.offset}" ${OwnerState.periodOffset === p.offset ? 'selected' : ''}>${periodLabel(p)}</option>`).join('')}
         </select>
       </div>
       <button id="btn-export" class="px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 h-fit">Download CSV</button>
     </div>
-    <p class="text-xs text-slate-400 mb-4">Laporan lengkap tersedia mulai tanggal 27 setiap bulan. Upah dihitung otomatis per jam kerja (1 hari penuh = 8 jam); jam lembur di atas 8 jam tercatat tapi tidak menambah upah otomatis. Hari tanpa keterangan pada periode berjalan dianggap Alpa. Potongan keterlambatan dihitung otomatis dari aturan di tab Aturan Keterlambatan; gaji bersih tidak pernah kurang dari nol.</p>
+    <p class="text-xs text-slate-400 mb-4">Laporan lengkap tersedia mulai tanggal ${PERIOD_START_DAY} setiap bulan. Upah dihitung otomatis per jam kerja (1 hari penuh = 8 jam); jam lembur di atas 8 jam tercatat tapi tidak menambah upah otomatis. Hari tanpa keterangan pada periode berjalan dianggap Alpa. Potongan keterlambatan dihitung otomatis dari aturan di tab Aturan Keterlambatan; gaji bersih tidak pernah kurang dari nol.</p>
     <div class="bg-white border border-slate-200 rounded-xl overflow-hidden">
       <div class="overflow-x-auto">
         <table class="w-full text-sm">

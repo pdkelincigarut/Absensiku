@@ -104,10 +104,14 @@ const TODAY = dateToStr(new Date());
 /* Riwayat dimulai dari awal periode gaji SEBELUMNYA, supaya di layar
    Laporan Gaji baik periode berjalan maupun periode lalu sama-sama
    terisi penuh -- periode lalu itu yang angkanya sudah final. */
+// Harus sama dengan PERIOD_START_DAY di backend/routes/payroll.js, supaya
+// riwayat yang dibuat benar-benar menutupi periode gaji secara utuh.
+const PERIOD_START_DAY = 28;
+
 function periodStartOf(monthOffset) {
   const now = new Date();
   const day = now.getDate();
-  const base = new Date(now.getFullYear(), now.getMonth() + (day >= 27 ? 0 : -1) + monthOffset, 27);
+  const base = new Date(now.getFullYear(), now.getMonth() + (day >= PERIOD_START_DAY ? 0 : -1) + monthOffset, PERIOD_START_DAY);
   return dateToStr(base);
 }
 
