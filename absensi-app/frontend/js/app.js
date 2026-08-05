@@ -9,44 +9,77 @@ function renderLogin(errorMsg) {
   app.innerHTML = `
     <div class="relative min-h-screen bg-klc-red overflow-hidden">
 
-      <!-- Butiran sukro: hiasan, bukan informasi. aria-hidden supaya pembaca
-           layar tidak membacakannya, dan pointer-events-none supaya tidak
-           pernah menghalangi klik ke form di atasnya. -->
-      <!-- Posisi digeser supaya gumpalan terpadat pada gambar tidak jatuh
-           tepat di belakang headline; sisi-sisi layar yang justru diisi. -->
-      <div class="pointer-events-none absolute inset-0 opacity-75"
-           style="background-image:url('img/sukro.png'); background-size:58% auto; background-position:38% -34%; background-repeat:repeat"
-           aria-hidden="true"></div>
+      <!-- Butiran sukro. Posisi, ukuran, dan JUMLAHNYA diukur langsung dari
+           mockup acuan: hanya lima butir, semuanya menempel di tepi layar,
+           bagian tengah dibiarkan bersih. Sebelumnya seluruh gambar sebaran
+           diubin sehingga butirannya berlipat-lipat dan menutupi headline.
+
+           Satuan lebar memakai vw supaya perbandingannya terhadap layar
+           tetap sama seperti rancangan di kanvas 1920.
+
+           Hiasan murni: aria-hidden supaya tidak dibacakan pembaca layar,
+           pointer-events-none supaya tidak pernah menghalangi klik ke form. -->
+      <div class="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden="true">
+        ${[
+          { src: 1, left: 7.4,  top: 5.7,  w: 2.76, rot: -12 },
+          { src: 2, left: 87.9, top: 4.8,  w: 2.50, rot: 24 },
+          { src: 3, left: 96.6, top: 11.9, w: 3.33, rot: -8 },
+          { src: 2, left: 1.0,  top: 28.6, w: 2.29, rot: 40 },
+          { src: 1, left: 3.6,  top: 56.8, w: 3.54, rot: 8 }
+        ].map(p => `
+          <img src="img/pilus-${p.src}.png" alt="" draggable="false"
+               class="absolute select-none"
+               style="left:${p.left}%; top:${p.top}%; width:${p.w}vw; transform:translate(-50%,-50%) rotate(${p.rot}deg)" />
+        `).join('')}
+      </div>
 
       <!-- Kerumunan orang menempel di dasar layar. Diulang mendatar supaya
            layar selebar apa pun tetap tertutup penuh dan ukuran figurnya
            tetap sama seperti di rancangan, bukan membesar ikut lebar layar. -->
-      <div class="pointer-events-none absolute bottom-0 left-0 right-0 h-[26vh] min-h-[150px] max-h-[300px] bg-repeat-x bg-bottom"
-           style="background-image:url('img/crowd.png'); background-size:auto 100%" aria-hidden="true"></div>
+      <div class="pointer-events-none absolute bottom-0 left-0 right-0 h-[31vh] min-h-[160px] max-h-[340px] bg-repeat-x bg-bottom"
+           style="background-image:url('img/crowd.png'); background-size:auto 140%; background-position:bottom" aria-hidden="true"></div>
 
-      <div class="relative min-h-screen flex flex-col lg:flex-row items-center justify-center gap-8 lg:gap-16 px-6 py-10 max-w-7xl mx-auto">
+      <!-- Tanpa pembatas lebar: pada mockup isi halaman memakai lebar layar
+           penuh (kartu berakhir di 94% lebar). Mengurungnya di max-w-7xl
+           membuat seluruh elemen mengecil dan menjauh dari rancangan. -->
+      <!-- Sisi kanan diberi ruang lebih lebar daripada kiri supaya tepi kanan
+           kartu berhenti di ~94% lebar layar, sama seperti mockup. -->
+      <div class="relative min-h-screen flex flex-col lg:flex-row items-center justify-center gap-10 lg:gap-[4vw] px-6 lg:pl-[4vw] lg:pr-[6vw] py-10">
 
         <!-- Panel merek -->
         <div class="w-full lg:flex-1 text-center lg:pb-24">
-          <img src="img/klc-logo.png" alt="KLC Food Co." class="h-12 sm:h-14 w-auto mx-auto mb-6 select-none" draggable="false" />
-          <!-- Bayangan halus: butiran di belakang berwarna krem terang dan
-               bisa jatuh tepat di belakang huruf putih. Tanpa ini, sebagian
-               huruf hilang kontras di layar tertentu. -->
-          <!-- Turun sampai text-4xl di layar sempit: "Welcome, Kelsi" pada
-               ukuran yang lebih besar akan melewati lebar layar ponsel. -->
-          <h1 class="font-display font-light text-white leading-none tracking-tight text-4xl sm:text-6xl lg:text-7xl"
-              style="text-shadow:0 2px 18px rgba(120,0,0,.45)">
+          <!-- Ukuran logo, headline, dan sub-teks diambil dari mockup:
+               logo 154px, tinggi huruf headline 100px, dan sub-teks 25px pada
+               kanvas 1920 -- karena itu semuanya dinyatakan dalam vw. -->
+          <img src="img/klc-logo.png" alt="KLC Food Co." draggable="false"
+               class="w-auto mx-auto mb-[3vh] select-none"
+               style="height:clamp(2.5rem, 3.2vw, 4.5rem)" />
+          <!-- Tanpa bayangan teks: pada mockup huruf putih duduk langsung di
+               atas merah polos, dan sekarang tidak ada butiran yang lewat di
+               belakangnya. Menambah bayangan justru membuatnya tidak sama.
+
+               Turun sampai text-4xl di layar sempit: "Welcome, Kelsi" pada
+               ukuran lebih besar akan melewati lebar layar ponsel. -->
+          <!-- Jarak huruf dirapatkan ke -0.05em: pada ukuran yang tinggi
+               hurufnya sudah sama dengan mockup, lebar barisnya masih ~10%
+               lebih panjang. Merapatkan jarak menyamakan lebar tanpa
+               mengecilkan hurufnya. -->
+          <h1 class="font-display font-light text-white leading-none"
+              style="font-size:clamp(2.25rem, 6.8vw, 8.5rem); letter-spacing:-0.05em">
             Welcome, Kelsi
           </h1>
-          <p class="font-plex text-white/90 mt-5 text-xs sm:text-sm tracking-[0.15em]"
-             style="text-shadow:0 1px 10px rgba(120,0,0,.5)">
+          <p class="font-plex text-white/90 tracking-[0.15em]"
+             style="font-size:clamp(0.7rem, 1.45vw, 1.75rem); margin-top:clamp(0.75rem, 2.2vh, 2rem)">
             have a great journey ahead
           </p>
         </div>
 
-        <!-- Kartu login -->
-        <div class="w-full max-w-md lg:max-w-sm xl:max-w-md shrink-0">
-          <div class="bg-white rounded-3xl shadow-2xl shadow-black/25 px-6 sm:px-8 pt-8 pb-6">
+        <!-- Kartu login. Pada mockup lebarnya ~35% layar; dikunci minimum
+             agar isinya tidak berdesakan dan maksimum agar tidak melebar
+             berlebihan di layar sangat besar. -->
+        <div class="w-full max-w-md shrink-0 lg:max-w-none"
+             style="width:min(100%, 35vw); min-width:min(100%, 24rem); max-width:42rem">
+          <div class="bg-white rounded-3xl shadow-2xl shadow-black/25 px-6 sm:px-10 pt-10 pb-7">
 
             <div class="text-center">
               <div class="w-14 h-14 rounded-2xl bg-klc-crimson text-white flex items-center justify-center mx-auto mb-3">
