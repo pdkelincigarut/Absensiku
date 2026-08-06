@@ -58,29 +58,37 @@
        merek KLC. Font sistem tetap jadi cadangan kalau CDN tidak terjangkau. */
     body { font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
 
-    /* Sebagian teks halaman berada di LUAR kartu putih -- label filter,
-       tautan "Hari ini", dan keterangan kaki. Di atas latar merah warna
-       abu-abunya tidak terbaca, jadi elemen semacam itu ditandai
-       `on-brand-bg` di tempatnya masing-masing dan diputihkan di sini.
+    /* Teks yang duduk langsung di atas latar merah harus putih. Aturannya
+       dibalik: SEMUA teks di dalam main diputihkan, KECUALI yang berada di
+       atas kartu putih.
 
-       Penanda dipakai daripada menebak lewat struktur induk, karena selektor
-       berbasis kedalaman akan ikut mengenai teks di dalam kartu begitu
-       tata letaknya sedikit berubah. */
-    [data-bg="merek"] .on-brand-bg,
-    [data-bg="merek"] .on-brand-bg label,
-    [data-bg="merek"] .on-brand-bg span,
-    [data-bg="merek"] .on-brand-bg button,
-    [data-bg="merek"] .on-brand-bg strong {
+       Sebelumnya tiap elemen ditandai satu per satu, dan dua kali masih ada
+       yang terlewat -- label filter di Riwayat, "Periode Penggajian", dan
+       seluruh baris filter Log Perubahan. Membalik aturannya membuat teks
+       baru ikut terurus dengan sendirinya. */
+    /* `:not(.bg-white)` ikut disertakan, bukan hanya `:not(.bg-white *)`:
+       elemen yang latar putihnya menempel pada dirinya sendiri -- misalnya
+       tombol Download CSV -- bukan keturunan kartu mana pun, sehingga tanpa
+       ini teksnya ikut diputihkan di atas tombol yang juga putih. */
+    [data-bg="merek"] main :is(p, span, label, h2, h3, h4, strong, button, a):not(.bg-white):not(.bg-white *) {
       color: #fff;
     }
-    [data-bg="merek"] p.on-brand-bg,
-    [data-bg="merek"] .on-brand-bg span.text-xs { color: rgba(255,255,255,.88); }
+    /* Keterangan kaki sedikit diredam supaya tidak seramai judul. */
+    [data-bg="merek"] main p.text-xs:not(.bg-white):not(.bg-white *),
+    [data-bg="merek"] main span.text-xs:not(.bg-white):not(.bg-white *) { color: rgba(255,255,255,.85); }
 
-    /* Kolom isian ikut mewarisi warna dari induknya, sehingga teksnya
-       berubah putih di atas kotak yang juga putih. Dikembalikan gelap. */
-    [data-bg="merek"] .on-brand-bg input,
-    [data-bg="merek"] .on-brand-bg select,
-    [data-bg="merek"] .on-brand-bg textarea { color: #0f172a; }
+    /* Kolom isian punya latar putih sendiri, jadi teksnya harus tetap gelap.
+       Tanpa ini isian tanggal berubah putih di atas kotak yang juga putih. */
+    [data-bg="merek"] main :is(input, select, textarea, option):not(.bg-white *) { color: #0f172a; }
+
+    /* Tombol bergaris di atas merah: garisnya ikut dicerahkan supaya
+       bentuknya tetap terbaca, bukan cuma teksnya. */
+    [data-bg="merek"] main button.border:not(.bg-white *) {
+      border-color: rgba(255,255,255,.55);
+    }
+    [data-bg="merek"] main button.border:not(.bg-white *):hover {
+      background-color: rgba(255,255,255,.12);
+    }
 
     /* ---------- Kenyamanan membaca tabel ----------
        Ditulis sekali di sini, bukan ditempel per berkas, supaya kelima
@@ -103,11 +111,45 @@
 
        Warna kepala tetap dipertegas: abu lebih pekat dan garis bawah yang
        lebih tegas membuat batas antara judul kolom dan isinya jelas. */
+    /* Kepala tabel dibedakan lewat bentuk huruf, bukan lewat garis tebal:
+       huruf kecil berspasi lebar terbaca jelas sebagai "judul kolom" dan
+       tidak bersaing dengan isinya. Cara baku pada tabel data. */
     main thead th {
-      background: #f1f5f9;
-      color: #475569;
+      background: linear-gradient(#f8fafc, #f1f5f9);
+      color: #64748b;
+      text-transform: uppercase;
+      font-size: 11px;
+      letter-spacing: .06em;
+      font-weight: 600;
       box-shadow: inset 0 -1px 0 #e2e8f0;
     }
+
+    /* Baris diberi ruang napas sedikit lebih banyak. Tabel sebelumnya rapat
+       sehingga mata sulit mengunci satu baris di antara belasan baris lain. */
+    main tbody td { padding-top: .7rem; padding-bottom: .7rem; }
+
+    /* Kartu diangkat dari latar. Di atas tekstur merah yang ramai, kartu
+       putih tanpa bayangan terlihat seperti tempelan datar; bayangan halus
+       memberi jarak antara isi dan latar. */
+    [data-bg="merek"] main .bg-white {
+      box-shadow: 0 12px 32px -14px rgba(0,0,0,.55), 0 2px 6px -2px rgba(0,0,0,.15);
+    }
+
+    /* Kolom pertama jadi jangkar saat mata menyusuri baris ke kanan. */
+    main tbody tr > td:first-child { color: #1e293b; }
+
+    /* Teks pendamping di dalam kartu -- kode karyawan, jumlah baris, satuan --
+       memakai slate-400 dan kontrasnya cuma 2,5:1 terhadap putih, di bawah
+       ambang baca 4,5:1. Dinaikkan satu tingkat: masih jelas lebih redup dari
+       teks utama, tapi sudah terbaca. */
+    main .bg-white .text-slate-400 { color: #64748b; }
+
+    /* Panah pengurut kolom nyaris tidak terlihat (1,4:1) sehingga tidak
+       terbaca sebagai "kolom ini bisa diurutkan". Dinaikkan sampai melewati
+       ambang 3:1 yang berlaku untuk elemen non-teks. Yang sedang aktif tetap
+       dibedakan lewat warna merah, bukan lewat ketebalan, jadi menaikkan yang
+       tidak aktif tidak membuat keduanya tertukar. */
+    main thead .text-slate-300 { color: #64748b; }
 
     /* Sorotan baris saat kursor lewat. Pada tabel selebar Laporan Gaji
        (sebelas kolom) mata gampang tergelincir ke baris sebelah di tengah

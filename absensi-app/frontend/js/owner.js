@@ -406,7 +406,11 @@ async function renderLaporanTab() {
           ${periodOptions.map(p => `<option value="${p.offset}" ${OwnerState.periodOffset === p.offset ? 'selected' : ''}>${periodLabel(p)}</option>`).join('')}
         </select>
       </div>
-      <button id="btn-export" class="px-4 py-2 rounded-lg bg-emerald-600 text-white text-sm font-medium hover:bg-emerald-700 h-fit">Download CSV</button>
+      <!-- Putih, bukan hijau: di atas latar merah, hijau adalah satu-satunya
+           warna yang keluar dari palet dan langsung menarik mata lebih dulu
+           daripada isi laporannya. Putih pekat tetap menonjol tanpa
+           bertabrakan. -->
+      <button id="btn-export" class="px-4 py-2 rounded-lg bg-white text-slate-700 hover:bg-slate-100 text-sm font-semibold shadow-lg shadow-black/20 h-fit">Download CSV</button>
     </div>
     <p class="text-xs text-slate-400 mb-4">Laporan lengkap tersedia mulai tanggal ${PERIOD_START_DAY} setiap bulan. Upah dihitung otomatis per jam kerja (1 hari penuh = 8 jam); jam lembur di atas 8 jam tercatat tapi tidak menambah upah otomatis. Hari tanpa keterangan pada periode berjalan dianggap Alpa. Potongan keterlambatan dihitung otomatis dari aturan di tab Aturan Keterlambatan; gaji bersih tidak pernah kurang dari nol.</p>
     <div class="bg-white border border-slate-200 rounded-xl overflow-hidden">
