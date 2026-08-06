@@ -35,9 +35,16 @@ function renderLogin(errorMsg) {
 
       <!-- Kerumunan orang menempel di dasar layar. Diulang mendatar supaya
            layar selebar apa pun tetap tertutup penuh dan ukuran figurnya
-           tetap sama seperti di rancangan, bukan membesar ikut lebar layar. -->
-      <div class="pointer-events-none absolute bottom-0 left-0 right-0 h-[31vh] min-h-[160px] max-h-[340px] bg-repeat-x bg-bottom"
-           style="background-image:url('img/crowd.png'); background-size:auto 140%; background-position:bottom" aria-hidden="true"></div>
+           tetap sama seperti di rancangan, bukan membesar ikut lebar layar.
+
+           Tinggi gambar dipaskan ke tinggi bidang (auto 100%), BUKAN
+           diperbesar melebihi bidangnya. Sempat dibuat 140% agar figurnya
+           lebih besar, tapi itu memotong bagian atas gambar sehingga baris
+           kepala teratas terpenggal garis lurus oleh merah. Pada mockup tepi
+           atas kerumunan bergerigi -- kepalanya utuh -- karena gambarnya
+           ditampilkan penuh. -->
+      <div class="pointer-events-none absolute bottom-0 left-0 right-0 h-[31vh] min-h-[160px] max-h-[340px] bg-repeat-x"
+           style="background-image:url('img/crowd.png'); background-size:auto 100%; background-position:bottom" aria-hidden="true"></div>
 
       <!-- Tanpa pembatas lebar: pada mockup isi halaman memakai lebar layar
            penuh (kartu berakhir di 94% lebar). Mengurungnya di max-w-7xl
