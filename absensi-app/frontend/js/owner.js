@@ -63,7 +63,7 @@ async function renderOwnerDashboard(account) {
   OwnerState.account = account;
   const app = document.getElementById('app');
   app.innerHTML = `
-    <div id="owner-shell" data-bg="merek" class="min-h-screen bg-klc-red bg-cover bg-center bg-fixed"
+    <div id="owner-shell" data-bg="merek" class="min-h-screen bg-klc-red bg-cover bg-bottom bg-fixed"
          style="background-image:url('img/bg-dashboard.png')">
       <!-- Header dibuat sedikit tembus pandang supaya latar merek di
            belakangnya ikut terlihat, tapi tetap cukup pekat agar teks

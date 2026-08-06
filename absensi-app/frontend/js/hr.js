@@ -14,7 +14,7 @@ const HrState = {
 async function renderHrDashboard(account) {
   const app = document.getElementById('app');
   app.innerHTML = `
-    <div data-bg="merek" class="min-h-screen bg-klc-red bg-cover bg-center bg-fixed"
+    <div data-bg="merek" class="min-h-screen bg-klc-red bg-cover bg-bottom bg-fixed"
          style="background-image:url('img/bg-dashboard.png')">
       <header class="bg-white/90 backdrop-blur-sm border-b border-slate-200 sticky top-0 z-10">
         <div class="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between flex-wrap gap-2">
