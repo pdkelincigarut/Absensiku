@@ -66,7 +66,7 @@ function renderScheduleCard(schedules, employees) {
     <div class="bg-white border border-slate-200 rounded-xl overflow-hidden">
       <div class="flex items-center justify-between px-4 py-3 border-b border-slate-200 bg-slate-50">
         <h2 class="font-semibold text-slate-700">Jadwal Kerja</h2>
-        <button id="btn-add-schedule" class="px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700">+ Atur Jadwal</button>
+        <button id="btn-add-schedule" class="px-3 py-1.5 rounded-lg bg-klc-600 text-white text-sm font-medium hover:bg-klc-700">+ Atur Jadwal</button>
       </div>
 
       <div class="px-4 py-3 border-b border-slate-100">
@@ -140,10 +140,10 @@ function openScheduleModal(employees, current) {
           <label class="text-sm text-slate-500 block mb-2">Berlaku untuk</label>
           <div class="space-y-2">
             <label class="flex items-center gap-2 text-sm text-slate-600">
-              <input type="radio" name="scope" value="company" class="accent-indigo-600 sched-scope" checked /> Semua karyawan (jadwal baku)
+              <input type="radio" name="scope" value="company" class="accent-klc-600 sched-scope" checked /> Semua karyawan (jadwal baku)
             </label>
             <label class="flex items-center gap-2 text-sm text-slate-600">
-              <input type="radio" name="scope" value="employees" class="accent-indigo-600 sched-scope" /> Karyawan tertentu saja
+              <input type="radio" name="scope" value="employees" class="accent-klc-600 sched-scope" /> Karyawan tertentu saja
             </label>
           </div>
         </div>
@@ -153,7 +153,7 @@ function openScheduleModal(employees, current) {
           <div class="border border-slate-300 rounded-lg max-h-40 overflow-y-auto divide-y divide-slate-100">
             ${employees.map(e => `
               <label class="flex items-center gap-2 px-3 py-2 text-sm text-slate-600">
-                <input type="checkbox" value="${e.id}" class="sched-emp accent-indigo-600" />
+                <input type="checkbox" value="${e.id}" class="sched-emp accent-klc-600" />
                 ${escapeHtml(e.name)}
               </label>
             `).join('')}
@@ -165,7 +165,7 @@ function openScheduleModal(employees, current) {
           <div class="flex flex-wrap gap-2">
             ${DAY_LABELS.map((label, i) => `
               <label class="flex items-center gap-1.5 text-sm text-slate-600 border border-slate-300 rounded-lg px-2.5 py-1.5">
-                <input type="checkbox" value="${i}" class="sched-day accent-indigo-600" ${checkedDays.has(i) ? 'checked' : ''} />
+                <input type="checkbox" value="${i}" class="sched-day accent-klc-600" ${checkedDays.has(i) ? 'checked' : ''} />
                 ${label}
               </label>
             `).join('')}
@@ -191,7 +191,7 @@ function openScheduleModal(employees, current) {
         <p id="form-error" class="text-sm text-rose-600 hidden"></p>
         <div class="flex gap-2 pt-2">
           <button type="button" id="btn-cancel-schedule" class="flex-1 py-2.5 rounded-lg border border-slate-300 text-slate-600 font-medium text-sm">Batal</button>
-          <button type="submit" class="flex-1 py-2.5 rounded-lg bg-indigo-600 text-white font-medium text-sm hover:bg-indigo-700">Simpan</button>
+          <button type="submit" class="flex-1 py-2.5 rounded-lg bg-klc-600 text-white font-medium text-sm hover:bg-klc-700">Simpan</button>
         </div>
       </form>
     </div>
@@ -261,8 +261,8 @@ function renderHolidayCard(holidays) {
           <select id="holiday-year" class="border border-slate-300 rounded-lg px-2 py-1 text-sm bg-white">
             ${years.map(y => `<option value="${y}" ${String(y) === SchedulesState.holidayYear ? 'selected' : ''}>${y}</option>`).join('')}
           </select>
-          <button id="btn-generate-holiday" class="px-3 py-1.5 rounded-lg border border-indigo-200 text-indigo-700 text-sm font-medium hover:bg-indigo-50">Isi Libur Nasional</button>
-          <button id="btn-add-holiday" class="px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700">+ Tambah</button>
+          <button id="btn-generate-holiday" class="px-3 py-1.5 rounded-lg border border-klc-200 text-klc-700 text-sm font-medium hover:bg-klc-50">Isi Libur Nasional</button>
+          <button id="btn-add-holiday" class="px-3 py-1.5 rounded-lg bg-klc-600 text-white text-sm font-medium hover:bg-klc-700">+ Tambah</button>
         </div>
       </div>
       <ul class="divide-y divide-slate-100">
@@ -278,7 +278,7 @@ function renderHolidayCard(holidays) {
                 <p class="text-xs text-slate-400">${formatTanggalIndo(h.date)}</p>
               </div>
               <div class="flex items-center gap-3 shrink-0">
-                ${h.isEstimate ? `<button data-date="${escapeHtml(h.date)}" class="btn-confirm-holiday text-indigo-600 hover:underline text-sm font-medium">Konfirmasi</button>` : ''}
+                ${h.isEstimate ? `<button data-date="${escapeHtml(h.date)}" class="btn-confirm-holiday text-slate-600 hover:text-klc-600 hover:underline text-sm font-medium">Konfirmasi</button>` : ''}
                 <button data-date="${escapeHtml(h.date)}" data-name="${escapeHtml(h.name)}" class="btn-del-holiday text-rose-600 hover:underline text-sm font-medium">Hapus</button>
               </div>
             </li>
@@ -354,7 +354,7 @@ function openHolidayModal() {
         <p id="form-error" class="text-sm text-rose-600 hidden"></p>
         <div class="flex gap-2 pt-2">
           <button type="button" id="btn-cancel-holiday" class="flex-1 py-2.5 rounded-lg border border-slate-300 text-slate-600 font-medium text-sm">Batal</button>
-          <button type="submit" class="flex-1 py-2.5 rounded-lg bg-indigo-600 text-white font-medium text-sm hover:bg-indigo-700">Simpan</button>
+          <button type="submit" class="flex-1 py-2.5 rounded-lg bg-klc-600 text-white font-medium text-sm hover:bg-klc-700">Simpan</button>
         </div>
       </form>
     </div>

@@ -25,7 +25,7 @@ const EMPLOYEE_SORT_KEYS = {
 const PER_PAGE_OPTIONS = [10, 25, 50];
 
 const AVATAR_PALETTE = [
-  'bg-indigo-100 text-indigo-700',
+  'bg-klc-100 text-klc-700',
   'bg-emerald-100 text-emerald-700',
   'bg-amber-100 text-amber-700',
   'bg-sky-100 text-sky-700',
@@ -97,9 +97,9 @@ function renderEmployeeListTab(employees) {
           <p class="text-xs text-slate-400 mt-0.5">Menampilkan ${sorted.length} dari ${employees.length} karyawan</p>
         </div>
         <div class="flex flex-col sm:flex-row gap-2 lg:ml-auto">
-          <input id="emp-search" type="search" value="${escapeHtml(EmployeeListState.search)}" placeholder="Cari nama, kode, jabatan..." class="border border-slate-300 rounded-lg px-3 py-2 text-sm w-full sm:w-64 focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+          <input id="emp-search" type="search" value="${escapeHtml(EmployeeListState.search)}" placeholder="Cari nama, kode, jabatan..." class="border border-slate-300 rounded-lg px-3 py-2 text-sm w-full sm:w-64 focus:outline-none focus:ring-2 focus:ring-klc-500" />
           <button id="btn-emp-download" class="px-4 py-2 rounded-lg border border-slate-300 text-slate-600 text-sm font-medium hover:bg-slate-50 whitespace-nowrap">Download</button>
-          <button id="btn-add-emp" class="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 whitespace-nowrap">+ Tambah Karyawan</button>
+          <button id="btn-add-emp" class="px-4 py-2 rounded-lg bg-klc-600 text-white text-sm font-medium hover:bg-klc-700 whitespace-nowrap">+ Tambah Karyawan</button>
         </div>
       </div>
 
@@ -165,7 +165,7 @@ function renderEmployeeListTab(employees) {
             <span class="text-xs font-medium px-2.5 py-1 rounded-full border ${emp.active ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-500 border-slate-200'}">${emp.active ? 'Aktif' : 'Nonaktif'}</span>
           </td>
           <td class="px-4 py-2.5 text-right">
-            <button data-id="${emp.id}" class="btn-edit-emp text-indigo-600 hover:underline text-sm font-medium">Edit</button>
+            <button data-id="${emp.id}" class="btn-edit-emp text-slate-600 hover:text-klc-600 hover:underline text-sm font-medium">Edit</button>
           </td>
         </tr>
       `;

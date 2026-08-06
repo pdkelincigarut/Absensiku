@@ -26,11 +26,27 @@
       theme: {
         extend: {
           colors: {
-            klc: { red: '#be0000', crimson: '#b31b32', 'crimson-dark': '#96162a' }
+            /* `red` khusus latar merek pada halaman login. Sisanya skala
+               bernomor seperti palet bawaan Tailwind, supaya penggantian
+               warna aksen lama (indigo-600 dan kawan-kawan) menjadi
+               pemetaan satu lawan satu, bukan tebak-tebakan per tempat.
+               600 adalah merah tua yang diambil dari mockup. */
+            klc: {
+              red: '#be0000',
+              50: '#fdf2f4',
+              100: '#fbe3e6',
+              200: '#f3c7ce',
+              500: '#c42a43',
+              600: '#b31b32',
+              700: '#96162a'
+            }
           },
           fontFamily: {
             display: ['Poppins', 'Segoe UI', 'system-ui', 'sans-serif'],
-            plex: ['"IBM Plex Mono"', 'ui-monospace', 'Consolas', 'monospace']
+            plex: ['"IBM Plex Mono"', 'ui-monospace', 'Consolas', 'monospace'],
+            /* `mono` bawaan ditimpa supaya kode karyawan, jam, dan angka di
+               seluruh dashboard memakai font sub milik merek. */
+            mono: ['"IBM Plex Mono"', 'ui-monospace', 'Consolas', 'monospace']
           }
         }
       }
@@ -38,7 +54,9 @@
   </script>
 
   <style>
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+    /* Poppins untuk seluruh aplikasi, bukan halaman login saja -- itu font
+       merek KLC. Font sistem tetap jadi cadangan kalau CDN tidak terjangkau. */
+    body { font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
   </style>
 </head>
 <body>

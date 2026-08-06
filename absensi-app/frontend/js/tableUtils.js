@@ -31,7 +31,7 @@ function nextSortState(state, key) {
 function sortableHeaderHtml({ state, key, label, className, buttonClass }) {
   const active = state.key === key;
   const marker = active
-    ? `<span class="text-indigo-600">${state.dir === 'asc' ? '▲' : '▼'}</span>`
+    ? `<span class="text-klc-600">${state.dir === 'asc' ? '▲' : '▼'}</span>`
     : `<span class="text-slate-300">⇅</span>`;
   return `<th class="px-4 py-2.5 font-medium ${className || ''}">
       <button type="button" data-sort="${key}" class="${buttonClass} flex items-center gap-1.5 hover:text-slate-700 transition">

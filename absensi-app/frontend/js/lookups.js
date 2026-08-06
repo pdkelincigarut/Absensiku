@@ -52,7 +52,7 @@ function renderLookupCard(kind, list) {
     <div class="bg-white border border-slate-200 rounded-xl overflow-hidden">
       <div class="flex items-center justify-between px-4 py-3 border-b border-slate-200 bg-slate-50">
         <h2 class="font-semibold text-slate-700">${config.title} <span class="text-slate-400 font-normal">(${list.length})</span></h2>
-        <button data-kind="${kind}" class="lookup-add px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700">+ Tambah</button>
+        <button data-kind="${kind}" class="lookup-add px-3 py-1.5 rounded-lg bg-klc-600 text-white text-sm font-medium hover:bg-klc-700">+ Tambah</button>
       </div>
       <ul class="divide-y divide-slate-100">
         ${list.length === 0
@@ -61,7 +61,7 @@ function renderLookupCard(kind, list) {
             <li class="flex items-center justify-between px-4 py-2.5">
               <span class="text-sm text-slate-700">${escapeHtml(row.name)}</span>
               <span class="flex gap-3 shrink-0">
-                <button data-kind="${kind}" data-id="${row.id}" data-name="${escapeHtml(row.name)}" class="lookup-edit text-indigo-600 hover:underline text-sm font-medium">Ubah</button>
+                <button data-kind="${kind}" data-id="${row.id}" data-name="${escapeHtml(row.name)}" class="lookup-edit text-slate-600 hover:text-klc-600 hover:underline text-sm font-medium">Ubah</button>
                 <button data-kind="${kind}" data-id="${row.id}" data-name="${escapeHtml(row.name)}" class="lookup-delete text-rose-600 hover:underline text-sm font-medium">Hapus</button>
               </span>
             </li>
@@ -104,7 +104,7 @@ function openLookupModal(kind, existing) {
         <p id="form-error" class="text-sm text-rose-600 hidden"></p>
         <div class="flex gap-2 pt-2">
           <button type="button" id="btn-cancel-lookup" class="flex-1 py-2.5 rounded-lg border border-slate-300 text-slate-600 font-medium text-sm">Batal</button>
-          <button type="submit" class="flex-1 py-2.5 rounded-lg bg-indigo-600 text-white font-medium text-sm hover:bg-indigo-700">Simpan</button>
+          <button type="submit" class="flex-1 py-2.5 rounded-lg bg-klc-600 text-white font-medium text-sm hover:bg-klc-700">Simpan</button>
         </div>
       </form>
     </div>

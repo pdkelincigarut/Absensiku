@@ -173,7 +173,7 @@ async function renderMonitoringList(containerEl, employees, date, accountName) {
               ${monitorSortableHeader('no', 'No', 'w-16')}
               <th class="px-4 py-2.5 font-medium">
                 <label class="flex items-center gap-2 cursor-pointer select-none">
-                  <input type="checkbox" id="check-all-header" class="accent-indigo-600" ${unmarked.length === 0 ? 'disabled' : ''} />
+                  <input type="checkbox" id="check-all-header" class="accent-klc-600" ${unmarked.length === 0 ? 'disabled' : ''} />
                   Checklist All
                 </label>
               </th>
@@ -196,7 +196,7 @@ async function renderMonitoringList(containerEl, employees, date, accountName) {
                 <tr class="border-t border-slate-100">
                   <td class="px-4 py-2.5 text-slate-400">${index + 1}</td>
                   <td class="px-4 py-2.5">
-                    <input type="checkbox" data-emp="${emp.id}" class="row-checkbox accent-indigo-600" ${rec ? 'checked' : ''} />
+                    <input type="checkbox" data-emp="${emp.id}" class="row-checkbox accent-klc-600" ${rec ? 'checked' : ''} />
                   </td>
                   <td class="px-4 py-2.5 text-slate-500 font-mono text-xs">${escapeHtml(emp.employeeCode || '—')}</td>
                   <td class="px-4 py-2.5 text-slate-700">${escapeHtml(emp.name)}${birthdayBadge}</td>
@@ -293,8 +293,8 @@ function renderAttendancePanel(containerEl, emp, rec, date, accountName, onSaved
       <form class="space-y-4">
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 max-w-lg">
           ${['hadir', 'izin', 'sakit', 'alpa'].map(s => `
-            <label class="flex items-center gap-2 border rounded-lg px-3 py-2 cursor-pointer has-[:checked]:border-indigo-500 has-[:checked]:bg-indigo-50">
-              <input type="radio" name="status" value="${s}" ${currentStatus === s ? 'checked' : ''} class="accent-indigo-600" />
+            <label class="flex items-center gap-2 border rounded-lg px-3 py-2 cursor-pointer has-[:checked]:border-klc-500 has-[:checked]:bg-klc-50">
+              <input type="radio" name="status" value="${s}" ${currentStatus === s ? 'checked' : ''} class="accent-klc-600" />
               <span class="text-sm">${STATUS_LABEL[s]}</span>
             </label>
           `).join('')}
@@ -305,8 +305,8 @@ function renderAttendancePanel(containerEl, emp, rec, date, accountName, onSaved
             <label class="text-sm text-slate-500 block mb-1">Tipe Kehadiran</label>
             <div class="grid grid-cols-3 gap-2 max-w-sm">
               ${['full', 'half', 'custom'].map(t => `
-                <label class="flex items-center justify-center gap-1 border rounded-lg px-2 py-2 cursor-pointer text-xs has-[:checked]:border-indigo-500 has-[:checked]:bg-indigo-50">
-                  <input type="radio" name="attendanceType" value="${t}" ${currentType === t ? 'checked' : ''} class="accent-indigo-600" />
+                <label class="flex items-center justify-center gap-1 border rounded-lg px-2 py-2 cursor-pointer text-xs has-[:checked]:border-klc-500 has-[:checked]:bg-klc-50">
+                  <input type="radio" name="attendanceType" value="${t}" ${currentType === t ? 'checked' : ''} class="accent-klc-600" />
                   <span>${ATTENDANCE_TYPE_LABEL[t]}</span>
                 </label>
               `).join('')}
@@ -337,7 +337,7 @@ function renderAttendancePanel(containerEl, emp, rec, date, accountName, onSaved
         <p class="form-error text-sm text-rose-600 hidden"></p>
         <div class="flex gap-2 pt-1 max-w-sm">
           <button type="button" class="btn-close-panel flex-1 py-2 rounded-lg border border-slate-300 text-slate-600 font-medium text-sm">Tutup</button>
-          <button type="submit" class="flex-1 py-2 rounded-lg bg-indigo-600 text-white font-medium text-sm hover:bg-indigo-700">Simpan</button>
+          <button type="submit" class="flex-1 py-2 rounded-lg bg-klc-600 text-white font-medium text-sm hover:bg-klc-700">Simpan</button>
         </div>
       </form>
     </div>

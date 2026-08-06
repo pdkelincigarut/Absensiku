@@ -34,14 +34,14 @@ async function renderLatePolicyTab() {
   container.innerHTML = `
     <div class="flex flex-col sm:flex-row sm:items-center gap-3 mb-4">
       <h2 class="font-semibold text-slate-700" id="lp-count">0 karyawan dipilih</h2>
-      <button id="btn-set-policy" class="px-4 py-2 rounded-lg bg-indigo-600 text-white text-sm font-medium hover:bg-indigo-700 disabled:bg-slate-300 disabled:cursor-not-allowed sm:ml-auto" disabled>Atur Aturan</button>
+      <button id="btn-set-policy" class="px-4 py-2 rounded-lg bg-klc-600 text-white text-sm font-medium hover:bg-klc-700 disabled:bg-slate-300 disabled:cursor-not-allowed sm:ml-auto" disabled>Atur Aturan</button>
     </div>
     <div class="bg-white border border-slate-200 rounded-xl overflow-hidden">
       <div class="overflow-x-auto">
         <table class="w-full text-sm">
           <thead class="bg-slate-50 text-slate-500 text-left">
             <tr>
-              <th class="px-4 py-2.5 w-10"><input type="checkbox" id="lp-check-all" class="accent-indigo-600" /></th>
+              <th class="px-4 py-2.5 w-10"><input type="checkbox" id="lp-check-all" class="accent-klc-600" /></th>
               <th class="px-4 py-2.5 font-medium">Nama</th>
               <th class="px-4 py-2.5 font-medium">Toleransi Telat</th>
               <th class="px-4 py-2.5 font-medium">Ambang</th>
@@ -64,7 +64,7 @@ async function renderLatePolicyTab() {
     // Satu karyawan bisa punya beberapa versi aturan; tiap versi jadi satu baris,
     // nama hanya ditulis di baris pertama supaya kelompoknya terbaca.
     tbody.innerHTML = list.map(row => {
-      const checkbox = `<input type="checkbox" data-id="${row.employeeId}" class="lp-check accent-indigo-600" ${LatePolicyState.selected.has(row.employeeId) ? 'checked' : ''} />`;
+      const checkbox = `<input type="checkbox" data-id="${row.employeeId}" class="lp-check accent-klc-600" ${LatePolicyState.selected.has(row.employeeId) ? 'checked' : ''} />`;
 
       if (row.versions.length === 0) {
         return `
@@ -174,13 +174,13 @@ function openLatePolicyModal(list) {
           <label class="text-sm text-slate-500 block mb-2">Skema potongan</label>
           <div class="space-y-2">
             <label class="flex items-center gap-2 text-sm text-slate-600">
-              <input type="radio" name="deductionType" value="flat" class="accent-indigo-600 lp-type" ${type === 'flat' ? 'checked' : ''} /> Nominal tetap
+              <input type="radio" name="deductionType" value="flat" class="accent-klc-600 lp-type" ${type === 'flat' ? 'checked' : ''} /> Nominal tetap
             </label>
             <label class="flex items-center gap-2 text-sm text-slate-600">
-              <input type="radio" name="deductionType" value="per_minute" class="accent-indigo-600 lp-type" ${type === 'per_minute' ? 'checked' : ''} /> Per menit kelebihan
+              <input type="radio" name="deductionType" value="per_minute" class="accent-klc-600 lp-type" ${type === 'per_minute' ? 'checked' : ''} /> Per menit kelebihan
             </label>
             <label class="flex items-center gap-2 text-sm text-slate-600">
-              <input type="radio" name="deductionType" value="percentage" class="accent-indigo-600 lp-type" ${type === 'percentage' ? 'checked' : ''} /> Persentase gaji
+              <input type="radio" name="deductionType" value="percentage" class="accent-klc-600 lp-type" ${type === 'percentage' ? 'checked' : ''} /> Persentase gaji
             </label>
           </div>
         </div>
@@ -201,7 +201,7 @@ function openLatePolicyModal(list) {
         <p id="form-error" class="text-sm text-rose-600 hidden"></p>
         <div class="flex gap-2 pt-2">
           <button type="button" id="btn-cancel-lp" class="flex-1 py-2.5 rounded-lg border border-slate-300 text-slate-600 font-medium text-sm">Batal</button>
-          <button type="submit" class="flex-1 py-2.5 rounded-lg bg-indigo-600 text-white font-medium text-sm hover:bg-indigo-700">Simpan</button>
+          <button type="submit" class="flex-1 py-2.5 rounded-lg bg-klc-600 text-white font-medium text-sm hover:bg-klc-700">Simpan</button>
         </div>
       </form>
     </div>
