@@ -38,7 +38,7 @@ async function renderLatePolicyTab() {
     </div>
     <div class="bg-white border border-slate-200 rounded-xl overflow-hidden">
       <div class="overflow-x-auto">
-        <table class="w-full text-sm">
+        <table class="w-full text-sm table-zebra">
           <thead class="bg-slate-50 text-slate-500 text-left">
             <tr>
               <th class="px-4 py-2.5 w-10"><input type="checkbox" id="lp-check-all" class="accent-klc-600" /></th>
@@ -56,6 +56,12 @@ async function renderLatePolicyTab() {
     </div>
     <p class="text-xs text-slate-400 mt-4 on-brand-bg">Batas telat dihitung dari <strong>jam masuk terjadwal ditambah toleransi</strong> &mdash; jadi kalau jadwal masuk 08:00 dan toleransi 30 menit, batasnya 08:30. Mengubah jam masuk di tab Jadwal &amp; Libur otomatis menggeser batas ini. Total menit telat diakumulasi sepanjang periode gaji (28&ndash;27); potongan baru berlaku kalau totalnya melewati ambang. Menyimpan aturan membuat versi baru, dan perhitungan sebelum tanggal berlakunya tidak ikut berubah.</p>
   `;
+
+  /* Aturan hasil migrasi memakai 1970-01-01 sebagai penanda "berlaku sejak
+     awal", bukan tanggal sungguhan. Menampilkannya mentah membuat pembaca
+     mengira ada kesalahan data. */
+  const formatBerlakuSejak = tanggal =>
+    tanggal === '1970-01-01' ? 'Sejak awal' : formatTanggalIndo(tanggal);
 
   const tbody = document.getElementById('lp-tbody');
   if (list.length === 0) {
@@ -83,11 +89,14 @@ async function renderLatePolicyTab() {
       return row.versions.map((v, i) => `
         <tr class="${i > 0 ? 'bg-slate-50/60' : ''}">
           <td class="px-4 py-2.5">${i === 0 ? checkbox : ''}</td>
-          <td class="px-4 py-2.5 text-slate-700">${i === 0 ? escapeHtml(row.name) : ''}</td>
+          <!-- Baris versi lama sengaja tidak mengulang nama supaya kelompoknya
+               terbaca, tapi baris tanpa nama sama sekali membingungkan --
+               diberi keterangan kecil sebagai gantinya. -->
+          <td class="px-4 py-2.5 text-slate-700">${i === 0 ? escapeHtml(row.name) : '<span class="text-xs text-slate-400 pl-4">versi sebelumnya</span>'}</td>
           <td class="px-4 py-2.5 text-slate-700">${v.graceMinutes} menit</td>
           <td class="px-4 py-2.5 text-slate-600">${v.thresholdMinutes} menit</td>
           <td class="px-4 py-2.5 text-slate-600">${escapeHtml(deductionSummary(v))}</td>
-          <td class="px-4 py-2.5 text-slate-500">${escapeHtml(v.effectiveFrom)}${i === 0 ? ' <span class="text-xs text-emerald-600">(berlaku)</span>' : ''}</td>
+          <td class="px-4 py-2.5 text-slate-500 whitespace-nowrap">${escapeHtml(formatBerlakuSejak(v.effectiveFrom))}${i === 0 ? ' <span class="text-xs text-emerald-600">(berlaku)</span>' : ''}</td>
           <td class="px-4 py-2.5 text-right">
             <button data-version="${v.id}" data-name="${escapeHtml(row.name)}" data-date="${escapeHtml(v.effectiveFrom)}" class="lp-delete text-rose-600 hover:underline text-sm font-medium">Hapus</button>
           </td>
@@ -130,7 +139,12 @@ async function renderLatePolicyTab() {
 
   tbody.querySelectorAll('.lp-delete').forEach(btn => {
     btn.addEventListener('click', async () => {
-      if (!confirm(`Hapus versi aturan "${btn.dataset.name}" yang berlaku mulai ${btn.dataset.date}? Perhitungan akan kembali memakai versi lain yang berlaku.`)) return;
+      // Tanggal dibaca ulang dari kolomnya, bukan dari atribut mentah, supaya
+      // dialog tidak menyebut "1970-01-01" seperti yang tampil di layar.
+      const tanggalTampil = btn.closest('tr').cells[5].innerText.replace('(berlaku)', '').trim();
+      // "berlaku mulai Sejak awal" tidak enak dibaca; kalimatnya disesuaikan.
+      const keterangan = tanggalTampil === 'Sejak awal' ? 'yang berlaku sejak awal' : `yang berlaku mulai ${tanggalTampil}`;
+      if (!confirm(`Hapus versi aturan "${btn.dataset.name}" ${keterangan}? Perhitungan akan kembali memakai versi lain yang berlaku.`)) return;
       try {
         await Storage.deleteLatePolicy(btn.dataset.version);
         renderLatePolicyTab();

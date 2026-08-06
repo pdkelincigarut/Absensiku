@@ -14,8 +14,9 @@ const HrState = {
 async function renderHrDashboard(account) {
   const app = document.getElementById('app');
   app.innerHTML = `
-    <div class="min-h-screen bg-slate-50">
-      <header class="bg-white border-b border-slate-200 sticky top-0 z-10">
+    <div data-bg="merek" class="min-h-screen bg-klc-red bg-cover bg-center bg-fixed"
+         style="background-image:url('img/bg-dashboard.png')">
+      <header class="bg-white/90 backdrop-blur-sm border-b border-slate-200 sticky top-0 z-10">
         <div class="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between flex-wrap gap-2">
           <div>
             <p class="text-xs text-slate-400">Panel HR Admin</p>
@@ -84,7 +85,7 @@ async function renderHrTab(account) {
 
   if (HrState.tab === 'monitoring') {
     container.innerHTML = `
-      <div class="flex flex-col sm:flex-row sm:items-center gap-3 mb-4">
+      <div class="flex flex-col sm:flex-row sm:items-center gap-3 mb-4 on-brand-bg">
         <div class="flex items-center gap-2">
           <label class="text-sm text-slate-500">Tanggal</label>
           <input type="date" id="monitor-date" value="${HrState.monitorDate}" class="border border-slate-300 rounded-lg px-3 py-1.5 text-sm" />

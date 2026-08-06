@@ -81,6 +81,45 @@
     [data-bg="merek"] .on-brand-bg input,
     [data-bg="merek"] .on-brand-bg select,
     [data-bg="merek"] .on-brand-bg textarea { color: #0f172a; }
+
+    /* ---------- Kenyamanan membaca tabel ----------
+       Ditulis sekali di sini, bukan ditempel per berkas, supaya kelima
+       tabel (monitoring, riwayat, karyawan, keterlambatan, laporan gaji)
+       berperilaku sama dan tidak menyimpang seiring waktu. */
+
+    /* Angka rata secara vertikal. Poppins memakai angka berlebar
+       bermacam-macam, sehingga kolom rupiah tampak bergoyang antar baris;
+       tabular-nums menyamakan lebar tiap digit. */
+    main table { font-variant-numeric: tabular-nums; }
+
+    /* Kepala tabel SENGAJA tidak dibuat menempel. Pembungkus tabel memakai
+       overflow-x-auto agar kolom masih bisa digeser di layar sempit, dan itu
+       menjadikannya kotak gulir tersendiri -- `position: sticky` lalu
+       menempel ke kotak tersebut, bukan ke layar, sehingga baris tabel malah
+       tampil di ATAS kepalanya saat digulir. Satu-satunya cara mematikan
+       kotak gulir itu adalah membuang gulir mendatarnya, yang berarti kolom
+       kanan tidak terjangkau di layar sempit. Keterbacaan kolom di layar
+       kecil lebih penting daripada kepala yang menempel.
+
+       Warna kepala tetap dipertegas: abu lebih pekat dan garis bawah yang
+       lebih tegas membuat batas antara judul kolom dan isinya jelas. */
+    main thead th {
+      background: #f1f5f9;
+      color: #475569;
+      box-shadow: inset 0 -1px 0 #e2e8f0;
+    }
+
+    /* Sorotan baris saat kursor lewat. Pada tabel selebar Laporan Gaji
+       (sebelas kolom) mata gampang tergelincir ke baris sebelah di tengah
+       jalan; sorotan ini yang menahannya. */
+    main tbody tr:not(.panel-row):hover { background-color: #fff7f7; }
+
+    /* Belang tipis, khusus tabel yang kolomnya banyak. Tidak dipasang ke
+       semua tabel: tabel monitoring menyelipkan baris panel yang
+       tersembunyi, sehingga "baris genap" di sana bukan baris berikutnya
+       yang terlihat dan belangnya akan tampak acak. */
+    .table-zebra tbody tr:nth-child(even) { background-color: #fafafa; }
+    .table-zebra tbody tr:nth-child(even):hover { background-color: #fff7f7; }
   </style>
 </head>
 <body>

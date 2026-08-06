@@ -63,7 +63,8 @@ async function renderOwnerDashboard(account) {
   OwnerState.account = account;
   const app = document.getElementById('app');
   app.innerHTML = `
-    <div id="owner-shell" class="min-h-screen bg-slate-50 bg-cover bg-center bg-fixed transition-[background-image]">
+    <div id="owner-shell" data-bg="merek" class="min-h-screen bg-klc-red bg-cover bg-center bg-fixed"
+         style="background-image:url('img/bg-dashboard.png')">
       <!-- Header dibuat sedikit tembus pandang supaya latar merek di
            belakangnya ikut terlihat, tapi tetap cukup pekat agar teks
            gelap di dalamnya terbaca di atas latar apa pun. -->
@@ -121,29 +122,6 @@ async function renderOwnerDashboard(account) {
   renderOwnerTab();
 }
 
-/* Empat calon latar dashboard, satu per tab, supaya keempatnya bisa
-   dibandingkan berdampingan tanpa berganti-ganti build. Tab lain tetap
-   memakai latar abu polos sebagai pembanding netral.
-
-   SEMENTARA: begitu satu rancangan dipilih, latar itu dipakai di semua tab
-   dan sisanya (beserta berkas gambarnya) dibuang. */
-const TAB_BACKGROUND = {
-  monitoring: 'img/bg-1.png',      // gradasi merah ke peach, KLC CORP. di bawah
-  karyawan: 'img/bg-2.png',        // tekstur kertas kusut, KLC CORP. di bawah
-  keterlambatan: 'img/bg-3.png',   // tekstur kertas, KLC CORP. vertikal di kanan
-  lookup: 'img/bg-4.png'           // gradasi, KLC CORP. vertikal di kanan
-};
-
-function applyTabBackground(tab) {
-  const shell = document.getElementById('owner-shell');
-  if (!shell) return;
-  const src = TAB_BACKGROUND[tab];
-  shell.style.backgroundImage = src ? `url('${src}')` : '';
-  // Teks lepas di dalam main harus ikut memutih di atas latar merah;
-  // penanda ini yang dipakai untuk mengaturnya lewat CSS.
-  shell.dataset.bg = src ? 'merek' : 'polos';
-}
-
 function tabButton(id, label) {
   const active = OwnerState.tab === id;
   return `<button data-tab="${id}" class="tab-btn whitespace-nowrap px-3 py-2 text-sm font-medium rounded-t-lg border-b-2 transition ${active ? 'border-klc-600 text-klc-600' : 'border-transparent text-slate-500 hover:text-slate-700'}">${label}</button>`;
@@ -151,7 +129,6 @@ function tabButton(id, label) {
 
 async function renderOwnerTab() {
   clearInterval(OwnerState.monitorTimer);
-  applyTabBackground(OwnerState.tab);
   document.querySelectorAll('.tab-btn').forEach(btn => {
     const active = btn.dataset.tab === OwnerState.tab;
     btn.className = `tab-btn whitespace-nowrap px-3 py-2 text-sm font-medium rounded-t-lg border-b-2 transition ${active ? 'border-klc-600 text-klc-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`;
@@ -434,7 +411,7 @@ async function renderLaporanTab() {
     <p class="text-xs text-slate-400 mb-4">Laporan lengkap tersedia mulai tanggal ${PERIOD_START_DAY} setiap bulan. Upah dihitung otomatis per jam kerja (1 hari penuh = 8 jam); jam lembur di atas 8 jam tercatat tapi tidak menambah upah otomatis. Hari tanpa keterangan pada periode berjalan dianggap Alpa. Potongan keterlambatan dihitung otomatis dari aturan di tab Aturan Keterlambatan; gaji bersih tidak pernah kurang dari nol.</p>
     <div class="bg-white border border-slate-200 rounded-xl overflow-hidden">
       <div class="overflow-x-auto">
-        <table class="w-full text-sm">
+        <table class="w-full text-sm table-zebra">
           <thead class="bg-slate-50 text-slate-500 text-left">
             <tr>
               <th class="px-4 py-2.5 font-medium">Karyawan</th>

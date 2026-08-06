@@ -104,7 +104,7 @@ function renderEmployeeListTab(employees) {
       </div>
 
       <div class="overflow-x-auto">
-        <table class="w-full text-sm">
+        <table class="w-full text-sm table-zebra">
           <thead class="bg-slate-50 text-slate-500 text-left">
             <tr>
               ${header('name', 'Nama Karyawan')}
