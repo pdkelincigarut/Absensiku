@@ -54,6 +54,8 @@ Bagian ini memisahkan **yang sudah jalan di kode** dari **yang masih rencana**. 
 
 **Anti-fraud check-in** (login karyawan, kiosk, selfie, geolocation, device binding) — dibatalkan 2026-08-01, bukan ditunda. Karyawan tidak absen sendiri, jadi tidak ada alur yang bisa ditambal. Digantikan akuntabilitas HR di tabel "Sudah Jalan". Jangan hidupkan lagi tanpa keputusan baru soal apakah karyawan mulai absen sendiri.
 
+**Tampilan ponsel** — dibatalkan 2026-08-06 atas keputusan owner. Aplikasi ini **khusus desktop**: PC HR (Windows) dan iMac owner lewat browser di jaringan kantor, keduanya jauh di atas lebar yang dibutuhkan. Jangan habiskan waktu membuat tabel jadi kartu untuk layar sempit, menguji di lebar ponsel, atau mengganti `bg-fixed` demi Safari iOS.
+
 ## Aturan & Konvensi Wajib
 
 - Perubahan yang menyentuh akses HR vs Owner harus jelas pemisahan permission-nya — pakai `requireAuth` / `requireOwner`, jangan cek role manual di dalam handler.
@@ -63,6 +65,7 @@ Bagian ini memisahkan **yang sudah jalan di kode** dari **yang masih rencana**. 
 - **`audit_log` hanya dibaca.** Jangan pernah buat endpoint ubah atau hapus untuknya.
 - Alasan wajib **hanya** saat mengubah baris yang sudah ada. Mewajibkannya di input pertama akan menghasilkan alasan "." yang menyamarkan koreksi sungguhan.
 - Jam absen selalu dari server. Jangan pernah terima `checkInTime` / `checkOutTime` dari body request, dan **jangan stempel ulang `check_in_time` yang sudah terisi** — potongan keterlambatan dihitung dari kolom itu.
+- **Desktop saja.** Boleh memakai tata letak yang butuh layar lebar. Lebar minimum tanpa geser mendatar: Laporan Gaji 1173px, Monitoring 1076px, sisanya di bawah 1000px. Tabel tetap dibungkus `overflow-x-auto` supaya layar yang lebih sempit masih bisa dipakai, tapi tampilan khusus ponsel bukan tujuan.
 
 ## Stack Teknologi
 
