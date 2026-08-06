@@ -37,7 +37,7 @@ async function renderLookupsTab() {
       <div id="lookup-card-job"></div>
       <div id="lookup-card-organization"></div>
     </div>
-    <p class="text-xs text-slate-400 mt-4">Daftar ini yang muncul sebagai pilihan Jabatan dan Divisi saat menambah atau mengubah data karyawan. Entri yang masih dipakai karyawan tidak bisa dihapus.</p>
+    <p class="text-xs text-slate-400 mt-4 on-brand-bg">Daftar ini yang muncul sebagai pilihan Jabatan dan Divisi saat menambah atau mengubah data karyawan. Entri yang masih dipakai karyawan tidak bisa dihapus.</p>
   `;
 
   renderLookupCard('job', jobs);

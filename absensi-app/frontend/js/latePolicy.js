@@ -33,7 +33,7 @@ async function renderLatePolicyTab() {
 
   container.innerHTML = `
     <div class="flex flex-col sm:flex-row sm:items-center gap-3 mb-4">
-      <h2 class="font-semibold text-slate-700" id="lp-count">0 karyawan dipilih</h2>
+      <h2 class="font-semibold text-slate-700 on-brand-bg" id="lp-count">0 karyawan dipilih</h2>
       <button id="btn-set-policy" class="px-4 py-2 rounded-lg bg-klc-600 text-white text-sm font-medium hover:bg-klc-700 disabled:bg-slate-300 disabled:cursor-not-allowed sm:ml-auto" disabled>Atur Aturan</button>
     </div>
     <div class="bg-white border border-slate-200 rounded-xl overflow-hidden">
@@ -54,7 +54,7 @@ async function renderLatePolicyTab() {
         </table>
       </div>
     </div>
-    <p class="text-xs text-slate-400 mt-4">Batas telat dihitung dari <strong>jam masuk terjadwal ditambah toleransi</strong> &mdash; jadi kalau jadwal masuk 08:00 dan toleransi 30 menit, batasnya 08:30. Mengubah jam masuk di tab Jadwal &amp; Libur otomatis menggeser batas ini. Total menit telat diakumulasi sepanjang periode gaji (27&ndash;26); potongan baru berlaku kalau totalnya melewati ambang. Menyimpan aturan membuat versi baru, dan perhitungan sebelum tanggal berlakunya tidak ikut berubah.</p>
+    <p class="text-xs text-slate-400 mt-4 on-brand-bg">Batas telat dihitung dari <strong>jam masuk terjadwal ditambah toleransi</strong> &mdash; jadi kalau jadwal masuk 08:00 dan toleransi 30 menit, batasnya 08:30. Mengubah jam masuk di tab Jadwal &amp; Libur otomatis menggeser batas ini. Total menit telat diakumulasi sepanjang periode gaji (28&ndash;27); potongan baru berlaku kalau totalnya melewati ambang. Menyimpan aturan membuat versi baru, dan perhitungan sebelum tanggal berlakunya tidak ikut berubah.</p>
   `;
 
   const tbody = document.getElementById('lp-tbody');

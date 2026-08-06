@@ -63,8 +63,11 @@ async function renderOwnerDashboard(account) {
   OwnerState.account = account;
   const app = document.getElementById('app');
   app.innerHTML = `
-    <div class="min-h-screen bg-slate-50">
-      <header class="bg-white border-b border-slate-200 sticky top-0 z-10">
+    <div id="owner-shell" class="min-h-screen bg-slate-50 bg-cover bg-center bg-fixed transition-[background-image]">
+      <!-- Header dibuat sedikit tembus pandang supaya latar merek di
+           belakangnya ikut terlihat, tapi tetap cukup pekat agar teks
+           gelap di dalamnya terbaca di atas latar apa pun. -->
+      <header class="bg-white/90 backdrop-blur-sm border-b border-slate-200 sticky top-0 z-10">
         <div class="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between flex-wrap gap-2">
           <div>
             <p class="text-xs text-slate-400">Panel Owner/Admin</p>
@@ -118,6 +121,29 @@ async function renderOwnerDashboard(account) {
   renderOwnerTab();
 }
 
+/* Empat calon latar dashboard, satu per tab, supaya keempatnya bisa
+   dibandingkan berdampingan tanpa berganti-ganti build. Tab lain tetap
+   memakai latar abu polos sebagai pembanding netral.
+
+   SEMENTARA: begitu satu rancangan dipilih, latar itu dipakai di semua tab
+   dan sisanya (beserta berkas gambarnya) dibuang. */
+const TAB_BACKGROUND = {
+  monitoring: 'img/bg-1.png',      // gradasi merah ke peach, KLC CORP. di bawah
+  karyawan: 'img/bg-2.png',        // tekstur kertas kusut, KLC CORP. di bawah
+  keterlambatan: 'img/bg-3.png',   // tekstur kertas, KLC CORP. vertikal di kanan
+  lookup: 'img/bg-4.png'           // gradasi, KLC CORP. vertikal di kanan
+};
+
+function applyTabBackground(tab) {
+  const shell = document.getElementById('owner-shell');
+  if (!shell) return;
+  const src = TAB_BACKGROUND[tab];
+  shell.style.backgroundImage = src ? `url('${src}')` : '';
+  // Teks lepas di dalam main harus ikut memutih di atas latar merah;
+  // penanda ini yang dipakai untuk mengaturnya lewat CSS.
+  shell.dataset.bg = src ? 'merek' : 'polos';
+}
+
 function tabButton(id, label) {
   const active = OwnerState.tab === id;
   return `<button data-tab="${id}" class="tab-btn whitespace-nowrap px-3 py-2 text-sm font-medium rounded-t-lg border-b-2 transition ${active ? 'border-klc-600 text-klc-600' : 'border-transparent text-slate-500 hover:text-slate-700'}">${label}</button>`;
@@ -125,6 +151,7 @@ function tabButton(id, label) {
 
 async function renderOwnerTab() {
   clearInterval(OwnerState.monitorTimer);
+  applyTabBackground(OwnerState.tab);
   document.querySelectorAll('.tab-btn').forEach(btn => {
     const active = btn.dataset.tab === OwnerState.tab;
     btn.className = `tab-btn whitespace-nowrap px-3 py-2 text-sm font-medium rounded-t-lg border-b-2 transition ${active ? 'border-klc-600 text-klc-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`;
@@ -155,7 +182,7 @@ function renderMonitoringTab(employees) {
   const container = document.getElementById('owner-content');
 
   container.innerHTML = `
-    <div class="flex flex-col sm:flex-row sm:items-center gap-3 mb-4">
+    <div class="flex flex-col sm:flex-row sm:items-center gap-3 mb-4 on-brand-bg">
       <div class="flex items-center gap-2">
         <label class="text-sm text-slate-500">Tanggal</label>
         <input type="date" id="monitor-date" value="${OwnerState.monitorDate}" class="border border-slate-300 rounded-lg px-3 py-1.5 text-sm" />

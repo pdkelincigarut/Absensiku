@@ -57,6 +57,30 @@
     /* Poppins untuk seluruh aplikasi, bukan halaman login saja -- itu font
        merek KLC. Font sistem tetap jadi cadangan kalau CDN tidak terjangkau. */
     body { font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
+
+    /* Sebagian teks halaman berada di LUAR kartu putih -- label filter,
+       tautan "Hari ini", dan keterangan kaki. Di atas latar merah warna
+       abu-abunya tidak terbaca, jadi elemen semacam itu ditandai
+       `on-brand-bg` di tempatnya masing-masing dan diputihkan di sini.
+
+       Penanda dipakai daripada menebak lewat struktur induk, karena selektor
+       berbasis kedalaman akan ikut mengenai teks di dalam kartu begitu
+       tata letaknya sedikit berubah. */
+    [data-bg="merek"] .on-brand-bg,
+    [data-bg="merek"] .on-brand-bg label,
+    [data-bg="merek"] .on-brand-bg span,
+    [data-bg="merek"] .on-brand-bg button,
+    [data-bg="merek"] .on-brand-bg strong {
+      color: #fff;
+    }
+    [data-bg="merek"] p.on-brand-bg,
+    [data-bg="merek"] .on-brand-bg span.text-xs { color: rgba(255,255,255,.88); }
+
+    /* Kolom isian ikut mewarisi warna dari induknya, sehingga teksnya
+       berubah putih di atas kotak yang juga putih. Dikembalikan gelap. */
+    [data-bg="merek"] .on-brand-bg input,
+    [data-bg="merek"] .on-brand-bg select,
+    [data-bg="merek"] .on-brand-bg textarea { color: #0f172a; }
   </style>
 </head>
 <body>
