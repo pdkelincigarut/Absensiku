@@ -416,19 +416,20 @@ async function renderLaporanTab() {
     <div class="bg-white border border-slate-200 rounded-xl overflow-hidden">
       <div class="overflow-x-auto">
         <table class="w-full text-sm table-zebra">
-          <thead class="bg-slate-50 text-slate-500 text-left">
+          <!-- Seluruh judul kolom rata tengah, isinya rata kiri. -->
+          <thead class="bg-slate-50 text-slate-500 text-center">
             <tr>
-              <th class="px-4 py-2.5 font-medium">Karyawan</th>
+              <th class="px-4 py-2.5 font-medium text-center">Karyawan</th>
               <th class="px-4 py-2.5 font-medium text-center">Hadir</th>
               <th class="px-4 py-2.5 font-medium text-center">Izin</th>
               <th class="px-4 py-2.5 font-medium text-center">Sakit</th>
               <th class="px-4 py-2.5 font-medium text-center">Alpa</th>
               <th class="px-4 py-2.5 font-medium text-center">Total Jam (dibayar)</th>
-              <th class="px-4 py-2.5 font-medium text-right">Upah Harian</th>
-              <th class="px-4 py-2.5 font-medium text-right">Total Gaji</th>
+              <th class="px-4 py-2.5 font-medium text-center">Upah Harian</th>
+              <th class="px-4 py-2.5 font-medium text-center">Total Gaji</th>
               <th class="px-4 py-2.5 font-medium text-center">Menit Telat</th>
-              <th class="px-4 py-2.5 font-medium text-right">Potongan</th>
-              <th class="px-4 py-2.5 font-medium text-right">Gaji Bersih</th>
+              <th class="px-4 py-2.5 font-medium text-center">Potongan</th>
+              <th class="px-4 py-2.5 font-medium text-center">Gaji Bersih</th>
             </tr>
           </thead>
           <tbody id="payroll-tbody" class="divide-y divide-slate-100"></tbody>
