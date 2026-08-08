@@ -466,33 +466,36 @@ async function renderPayrollTable() {
     return;
   }
 
+  /* Seluruh sel isi dibuat rata kiri atas permintaan. Judul kolom
+     sengaja TIDAK diubah, jadi sebagian judul (angka dan rupiah) masih
+     rata tengah/kanan di atas isinya yang rata kiri. */
   tbody.innerHTML = data.rows.map(r => `
     <tr>
-      <td class="px-4 py-2.5 text-slate-700">${escapeHtml(r.name)}</td>
-      <td class="px-4 py-2.5 text-center text-emerald-700 font-medium">${r.hadir}</td>
-      <td class="px-4 py-2.5 text-center text-amber-700">${r.izin}</td>
-      <td class="px-4 py-2.5 text-center text-sky-700">${r.sakit}</td>
-      <td class="px-4 py-2.5 text-center text-rose-700">${r.alpa}</td>
-      <td class="px-4 py-2.5 text-center text-slate-600">${r.totalHoursPaid} jam</td>
-      <td class="px-4 py-2.5 text-right text-slate-500">${formatRupiah(r.dailyWage)}</td>
-      <td class="px-4 py-2.5 text-right text-slate-600">${formatRupiah(r.totalWage)}</td>
-      <td class="px-4 py-2.5 text-center text-slate-600">${r.latePolicy ? r.lateMinutesTotal + ' mnt' : '&mdash;'}</td>
+      <td class="px-4 py-2.5 text-left text-slate-700">${escapeHtml(r.name)}</td>
+      <td class="px-4 py-2.5 text-left text-emerald-700 font-medium">${r.hadir}</td>
+      <td class="px-4 py-2.5 text-left text-amber-700">${r.izin}</td>
+      <td class="px-4 py-2.5 text-left text-sky-700">${r.sakit}</td>
+      <td class="px-4 py-2.5 text-left text-rose-700">${r.alpa}</td>
+      <td class="px-4 py-2.5 text-left text-slate-600">${r.totalHoursPaid} jam</td>
+      <td class="px-4 py-2.5 text-left text-slate-500">${formatRupiah(r.dailyWage)}</td>
+      <td class="px-4 py-2.5 text-left text-slate-600">${formatRupiah(r.totalWage)}</td>
+      <td class="px-4 py-2.5 text-left text-slate-600">${r.latePolicy ? r.lateMinutesTotal + ' mnt' : '&mdash;'}</td>
       <!-- whitespace-nowrap: tanda minus sempat terpisah dari angkanya ke
            baris berikutnya, sehingga potongan terbaca seperti dua nilai. -->
-      <td class="px-4 py-2.5 text-right whitespace-nowrap ${r.deductionAmount > 0 ? 'text-rose-600' : 'text-slate-400'}">${r.deductionAmount > 0 ? '-' + formatRupiah(r.deductionAmount) : '&mdash;'}</td>
-      <td class="px-4 py-2.5 text-right text-slate-800 font-semibold">${formatRupiah(r.finalWage)}</td>
+      <td class="px-4 py-2.5 text-left whitespace-nowrap ${r.deductionAmount > 0 ? 'text-rose-600' : 'text-slate-400'}">${r.deductionAmount > 0 ? '-' + formatRupiah(r.deductionAmount) : '&mdash;'}</td>
+      <td class="px-4 py-2.5 text-left text-slate-800 font-semibold">${formatRupiah(r.finalWage)}</td>
     </tr>
   `).join('');
 
   tfoot.innerHTML = `
     <tr>
       <td class="px-4 py-3 font-normal text-slate-500" colspan="7">Total Gaji Kotor (sebelum potongan)</td>
-      <td class="px-4 py-3 text-right text-slate-600">${formatRupiah(data.grandTotal)}</td>
+      <td class="px-4 py-3 text-left text-slate-600">${formatRupiah(data.grandTotal)}</td>
       <td colspan="3"></td>
     </tr>
     <tr>
       <td class="px-4 py-3" colspan="10">Total Gaji Bersih Seluruh Karyawan</td>
-      <td class="px-4 py-3 text-right text-klc-700">${formatRupiah(data.grandFinalTotal)}</td>
+      <td class="px-4 py-3 text-left text-klc-700">${formatRupiah(data.grandFinalTotal)}</td>
     </tr>
   `;
 }
