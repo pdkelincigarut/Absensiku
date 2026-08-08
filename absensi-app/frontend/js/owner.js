@@ -483,7 +483,9 @@ async function renderPayrollTable() {
       <td class="px-4 py-2.5 text-left text-slate-600">${r.latePolicy ? r.lateMinutesTotal + ' mnt' : '&mdash;'}</td>
       <!-- whitespace-nowrap: tanda minus sempat terpisah dari angkanya ke
            baris berikutnya, sehingga potongan terbaca seperti dua nilai. -->
-      <td class="px-4 py-2.5 text-left whitespace-nowrap ${r.deductionAmount > 0 ? 'text-rose-600' : 'text-slate-400'}">${r.deductionAmount > 0 ? '-' + formatRupiah(r.deductionAmount) : '&mdash;'}</td>
+      <!-- Nilainya rata kiri seperti kolom lain, tapi tanda strip saat tidak
+           ada potongan dibuat rata tengah. -->
+      <td class="px-4 py-2.5 whitespace-nowrap ${r.deductionAmount > 0 ? 'text-left text-rose-600' : 'text-center text-slate-400'}">${r.deductionAmount > 0 ? '-' + formatRupiah(r.deductionAmount) : '&mdash;'}</td>
       <td class="px-4 py-2.5 text-left text-slate-800 font-semibold">${formatRupiah(r.finalWage)}</td>
     </tr>
   `).join('');
