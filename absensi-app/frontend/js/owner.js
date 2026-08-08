@@ -480,7 +480,9 @@ async function renderPayrollTable() {
       <td class="px-4 py-2.5 text-left text-slate-600">${r.totalHoursPaid} jam</td>
       <td class="px-4 py-2.5 text-left text-slate-500">${formatRupiah(r.dailyWage)}</td>
       <td class="px-4 py-2.5 text-left text-slate-600">${formatRupiah(r.totalWage)}</td>
-      <td class="px-4 py-2.5 text-left text-slate-600">${r.latePolicy ? r.lateMinutesTotal + ' mnt' : '&mdash;'}</td>
+      <!-- Sama seperti kolom Potongan: strip untuk karyawan yang belum punya
+           aturan keterlambatan dibuat rata tengah, angkanya rata kiri. -->
+      <td class="px-4 py-2.5 text-slate-600 ${r.latePolicy ? 'text-left' : 'text-center'}">${r.latePolicy ? r.lateMinutesTotal + ' mnt' : '&mdash;'}</td>
       <!-- whitespace-nowrap: tanda minus sempat terpisah dari angkanya ke
            baris berikutnya, sehingga potongan terbaca seperti dua nilai. -->
       <!-- Nilainya rata kiri seperti kolom lain, tapi tanda strip saat tidak
