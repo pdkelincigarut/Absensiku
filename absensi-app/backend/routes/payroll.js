@@ -158,7 +158,16 @@ router.get('/', requireOwner, (req, res) => {
     let cursor = startS;
     while (cursor <= endS && cursor <= todayS) {
       const schedule = resolveSchedule(schedules, emp.id, cursor);
-      const workday = isWorkday(schedule, cursor, holidaySet);
+
+      /* Hari sebelum karyawan bergabung bukan tanggung jawabnya. Tanpa ini,
+         karyawan yang masuk di pertengahan periode langsung terlihat bolos
+         sepanjang bagian awal periode, dan gajinya ikut terpotong.
+
+         Karyawan tanpa tanggal masuk (data lama sebelum kolomnya ada)
+         diperlakukan seperti sebelumnya: seluruh periode dihitung. */
+      const belumBergabung = emp.join_date && cursor < emp.join_date;
+
+      const workday = isWorkday(schedule, cursor, holidaySet) && !belumBergabung;
       if (workday && cursor < todayS) counts.scheduledDays++;
 
       const rec = byDate.get(cursor);

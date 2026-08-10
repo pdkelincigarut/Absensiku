@@ -36,6 +36,7 @@ Bagian ini memisahkan **yang sudah jalan di kode** dari **yang masih rencana**. 
 | Audit log | Tabel `audit_log`, tab "Log Perubahan" khusus Owner, snapshot sebelum/sesudah tiap perubahan |
 | Koreksi wajib beralasan | `reason` wajib saat mengubah absensi yang sudah tercatat, opsional saat input pertama |
 | Soft delete karyawan | `employees.deleted_at`; laporan gaji periode lampau tidak bergeser |
+| Tanggal masuk & catatan | `employees.join_date` / `notes`; hari sebelum tanggal masuk tidak dihitung alpa di laporan gaji |
 | Export CSV | Laporan gaji (`owner.js`) dan daftar karyawan (`employeeList.js`), dibuat di browser pakai Blob + BOM UTF-8 supaya rapi dibuka Excel |
 | Data demo | `seedDemo.js` — riwayat sebulan lebih untuk presentasi, terpisah dari `seed.js` |
 
@@ -64,6 +65,7 @@ Bagian ini memisahkan **yang sudah jalan di kode** dari **yang masih rencana**. 
 - **Setiap route yang menulis data wajib memanggil `recordAudit`.** Log yang bolong berbohong lewat kekosongannya — pembaca menyimpulkan "tidak ada yang berubah" padahal cuma tidak dicatat.
 - **`audit_log` hanya dibaca.** Jangan pernah buat endpoint ubah atau hapus untuknya.
 - Alasan wajib **hanya** saat mengubah baris yang sudah ada. Mewajibkannya di input pertama akan menghasilkan alasan "." yang menyamarkan koreksi sungguhan.
+- **Hari sebelum  bukan alpa.** Karyawan yang bergabung di tengah periode tidak boleh terlihat bolos pada masa sebelum dia bekerja. Absensi yang terlanjur tercatat sebelum tanggal itu TETAP dibayar -- catatan kehadiran adalah bukti, bukan tebakan.
 - Jam absen selalu dari server. Jangan pernah terima `checkInTime` / `checkOutTime` dari body request, dan **jangan stempel ulang `check_in_time` yang sudah terisi** — potongan keterlambatan dihitung dari kolom itu.
 - **Desktop saja.** Boleh memakai tata letak yang butuh layar lebar. Lebar minimum tanpa geser mendatar: Laporan Gaji 1173px, Monitoring 1076px, sisanya di bawah 1000px. Tabel tetap dibungkus `overflow-x-auto` supaya layar yang lebih sempit masih bisa dipakai, tapi tampilan khusus ponsel bukan tujuan.
 

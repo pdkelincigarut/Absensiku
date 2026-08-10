@@ -249,3 +249,60 @@ test('absensi lama tetap memakai versi aturan yang berlaku saat itu', async () =
   assert.equal(sesudah.lateMinutesTotal, 45, 'aturan baru tidak boleh mengubah hari lampau');
   assert.equal(sesudah.deductionAmount, 20000);
 });
+
+/* ---------------- Tanggal masuk ---------------- */
+
+/* Karyawan yang bergabung di tengah periode tidak boleh dianggap bolos pada
+   hari-hari sebelum dia bekerja di sini. */
+test('hari sebelum tanggal masuk tidak dihitung alpa', async () => {
+  const id = insertEmployee('Baru Bergabung');
+  const tanpaTanggalMasuk = await payrollRow(id);
+
+  // Bergabung kemarin: hampir seluruh periode berjalan ada di belakangnya.
+  const kemarin = new Date();
+  kemarin.setDate(kemarin.getDate() - 1);
+  const pad2 = n => String(n).padStart(2, '0');
+  const tanggalMasuk = `${kemarin.getFullYear()}-${pad2(kemarin.getMonth() + 1)}-${pad2(kemarin.getDate())}`;
+  db.prepare('UPDATE employees SET join_date = ? WHERE id = ?').run(tanggalMasuk, id);
+
+  const sesudah = await payrollRow(id);
+  assert.ok(tanpaTanggalMasuk.alpa > sesudah.alpa,
+    `alpa harus berkurang setelah tanggal masuk diisi (sebelum ${tanpaTanggalMasuk.alpa}, sesudah ${sesudah.alpa})`);
+  assert.ok(sesudah.alpa <= 1, 'hanya hari sejak bergabung yang boleh terhitung');
+  assert.ok(sesudah.scheduledDays < tanpaTanggalMasuk.scheduledDays,
+    'hari kerja terjadwal juga tidak boleh menghitung masa sebelum bergabung');
+});
+
+test('karyawan tanpa tanggal masuk dihitung seperti sebelumnya', async () => {
+  const id = insertEmployee('Tanpa Tanggal Masuk');
+  const row = await payrollRow(id);
+  const hariKerjaLampau = countDaysInPeriod(0, d => [1, 2, 3, 4, 5].includes(d.getDay()));
+  assert.equal(row.alpa, hariKerjaLampau, 'seluruh periode tetap dihitung kalau tanggal masuk kosong');
+});
+
+/* Absensi yang terlanjur tercatat sebelum tanggal masuk tetap dibayar --
+   catatan kehadiran adalah bukti, bukan tebakan. */
+test('absensi sebelum tanggal masuk tetap dibayar kalau tercatat', async () => {
+  const id = insertEmployee('Tercatat Lebih Awal');
+  const { start } = periodByOffset(0);
+  const tanggalAwal = dateToStr(start);
+
+  db.prepare(`
+    INSERT INTO attendance (employee_id, date, status, attendance_type, hours_worked, check_in_time, note, marked_by, updated_at)
+    VALUES (?, ?, 'hadir', 'full', 8, '08:00', '', 'test', ?)
+  `).run(id, tanggalAwal, Date.now());
+
+  // Tanggal masuk SESUDAH tanggal absensi tadi.
+  const setelah = addDays(start, 3);
+  db.prepare('UPDATE employees SET join_date = ? WHERE id = ?').run(dateToStr(setelah), id);
+
+  const row = await payrollRow(id);
+  assert.equal(row.hadir, 1, 'hari yang sudah tercatat hadir tetap dihitung');
+  assert.ok(row.totalWage > 0, 'dan tetap dibayar');
+});
+
+function addDays(d, n) {
+  const x = new Date(d);
+  x.setDate(x.getDate() + n);
+  return x;
+}
