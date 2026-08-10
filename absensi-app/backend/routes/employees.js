@@ -55,6 +55,8 @@ function toJson(row, includeWage) {
     employeeCode: row.employee_code,
     name: row.name,
     birthDate: row.birth_date,
+    joinDate: row.join_date,
+    notes: row.notes,
     job: row.job_id ? { id: row.job_id, name: row.job_name } : null,
     organization: row.organization_id ? { id: row.organization_id, name: row.organization_name } : null,
     active: !!row.active,
@@ -82,11 +84,18 @@ function findLive(id) {
 /* Validasi bersama POST & PUT. `selfId` diisi saat PUT supaya karyawan
    yang sedang diubah tidak dianggap bentrok dengan kodenya sendiri.
    Mengembalikan string pesan error, atau null kalau semuanya sah. */
+const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+
 function validateEmployeeBody(body, selfId) {
-  const { name, dailyWage, employeeCode, jobId, organizationId } = body;
+  const { name, dailyWage, employeeCode, jobId, organizationId, joinDate } = body;
 
   if (!name || !name.trim() || !Number.isFinite(Number(dailyWage))) {
     return 'Nama dan upah harian wajib diisi.';
+  }
+
+  // Tanggal masuk boleh dikosongkan, tapi kalau diisi harus tanggal betulan.
+  if (joinDate != null && joinDate !== '' && !DATE_PATTERN.test(String(joinDate))) {
+    return 'Tanggal masuk harus format YYYY-MM-DD.';
   }
 
   const code = String(employeeCode == null ? '' : employeeCode).trim();
@@ -141,12 +150,16 @@ router.post('/', requireOwner, (req, res) => {
   }
 
   const info = db.prepare(`
-    INSERT INTO employees (name, daily_wage, birth_date, active, created_at, employee_code, job_id, organization_id, photo, photo_mime, photo_updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO employees (name, daily_wage, birth_date, join_date, notes, active, created_at, employee_code, job_id, organization_id, photo, photo_mime, photo_updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     body.name.trim(),
     Number(body.dailyWage),
     body.birthDate || null,
+    body.joinDate || null,
+    // Catatan kosong disimpan NULL, bukan string kosong, supaya "belum diisi"
+    // dan "sengaja dikosongkan" tidak jadi dua hal berbeda di database.
+    (body.notes && String(body.notes).trim()) || null,
     body.active === false ? 0 : 1,
     Date.now(),
     String(body.employeeCode).trim(),
@@ -187,12 +200,14 @@ router.put('/:id', requireOwner, (req, res) => {
 
   db.prepare(`
     UPDATE employees
-    SET name = ?, daily_wage = ?, birth_date = ?, active = ?, employee_code = ?, job_id = ?, organization_id = ?
+    SET name = ?, daily_wage = ?, birth_date = ?, join_date = ?, notes = ?, active = ?, employee_code = ?, job_id = ?, organization_id = ?
     WHERE id = ?
   `).run(
     body.name.trim(),
     Number(body.dailyWage),
     body.birthDate || null,
+    body.joinDate || null,
+    (body.notes && String(body.notes).trim()) || null,
     body.active === false ? 0 : 1,
     String(body.employeeCode).trim(),
     normalizeLookupId(body.jobId),

@@ -177,3 +177,64 @@ test('PUT dengan foto baru menggantikan foto lama dan memperbarui versinya', asy
   assert.equal(updated.hasPhoto, true);
   assert.ok(updated.photoVersion > firstVersion, 'photoVersion harus naik supaya cache browser tidak menahan foto lama');
 });
+
+/* ---------------- Tanggal masuk & catatan ---------------- */
+
+test('POST menyimpan tanggal masuk dan catatan', async () => {
+  const res = await createEmployee({
+    name: 'Karyawan Baru', dailyWage: 100000, employeeCode: 'JD-1',
+    joinDate: '2026-03-01', notes: 'Masa percobaan sampai Juni.'
+  });
+  assert.equal(res.status, 201);
+
+  const body = await res.json();
+  assert.equal(body.joinDate, '2026-03-01');
+  assert.equal(body.notes, 'Masa percobaan sampai Juni.');
+});
+
+test('tanggal masuk dan catatan boleh dikosongkan', async () => {
+  const res = await createEmployee({ name: 'Tanpa Keduanya', dailyWage: 100000, employeeCode: 'JD-2' });
+  assert.equal(res.status, 201);
+
+  const body = await res.json();
+  assert.equal(body.joinDate, null);
+  assert.equal(body.notes, null);
+});
+
+/* Catatan berisi spasi saja disimpan NULL, bukan string kosong, supaya
+   "belum diisi" tidak terpecah jadi dua keadaan yang berbeda di database. */
+test('catatan berisi spasi saja disimpan sebagai kosong', async () => {
+  const res = await createEmployee({ name: 'Spasi Saja', dailyWage: 100000, employeeCode: 'JD-3', notes: '    ' });
+  assert.equal((await res.json()).notes, null);
+});
+
+test('POST menolak tanggal masuk yang bukan tanggal', async () => {
+  const res = await createEmployee({ name: 'Tanggal Ngawur', dailyWage: 100000, employeeCode: 'JD-4', joinDate: '1 Maret' });
+  assert.equal(res.status, 400);
+  assert.match((await res.json()).error, /Tanggal masuk/i);
+});
+
+test('PUT bisa mengubah dan mengosongkan tanggal masuk serta catatan', async () => {
+  const dibuat = await (await createEmployee({
+    name: 'Diubah', dailyWage: 100000, employeeCode: 'JD-5',
+    joinDate: '2025-01-10', notes: 'catatan awal'
+  })).json();
+
+  const res = await fetch(`http://localhost:${port}/api/employees/${dibuat.id}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ name: 'Diubah', dailyWage: 100000, employeeCode: 'JD-5', joinDate: '', notes: '' })
+  });
+  assert.equal(res.status, 200);
+
+  const body = await res.json();
+  assert.equal(body.joinDate, null);
+  assert.equal(body.notes, null);
+});
+
+test('GET daftar karyawan ikut membawa tanggal masuk dan catatan', async () => {
+  const list = await (await fetch(`http://localhost:${port}/api/employees`)).json();
+  const target = list.find(e => e.employeeCode === 'JD-1');
+  assert.equal(target.joinDate, '2026-03-01');
+  assert.equal(target.notes, 'Masa percobaan sampai Juni.');
+});

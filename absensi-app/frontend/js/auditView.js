@@ -48,6 +48,8 @@ const AUDIT_FIELD_LABEL = {
   daily_wage: 'Upah harian',
   employee_code: 'Kode karyawan',
   birth_date: 'Tanggal lahir',
+  join_date: 'Tanggal masuk',
+  notes: 'Catatan',
   active: 'Aktif',
   deleted_at: 'Dihapus pada',
   date: 'Tanggal',
@@ -85,7 +87,7 @@ function auditValueDisplay(key, value) {
   if (['daily_wage', 'deduction_flat_amount', 'deduction_per_minute_amount'].includes(key)) {
     return 'Rp' + Number(value).toLocaleString('id-ID');
   }
-  if (['date', 'birth_date', 'effective_from'].includes(key)) {
+  if (['date', 'birth_date', 'join_date', 'effective_from'].includes(key)) {
     // effective_from bawaan migrasi memakai 1970-01-01 sebagai penanda
     // "berlaku sejak awal", bukan tanggal sungguhan.
     return value === '1970-01-01' ? 'Sejak awal' : formatTanggalIndo(String(value));

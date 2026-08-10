@@ -125,19 +125,23 @@ const ORGS = ['Accounting', 'Information & Technology', 'Business Development', 
 
 /* Sengaja 12 orang: cukup untuk memicu pagination dan membuat pencarian
    serta pengurutan tabel terasa berguna, masih enak dibaca satu layar. */
+/* Tanggal masuk sengaja tersebar dari 2018 sampai tahun ini, dan yang paling
+   senior dipasangkan dengan jabatan tertinggi -- supaya kolomnya terbaca
+   masuk akal, bukan angka acak. Catatan hanya diisi pada beberapa orang;
+   kalau semua punya catatan, kolom itu berhenti terasa seperti pengecualian. */
 const EMPLOYEES = [
-  { name: 'Budi Santoso',    job: 'Staff',      org: 'Accounting',                wage: 110000, birth: '1995-08-01' },
-  { name: 'Siti Aminah',     job: 'Supervisor', org: 'Business Development',      wage: 150000, birth: '1998-03-12' },
-  { name: 'Andi Wijaya',     job: 'Manager',    org: 'Information & Technology',  wage: 200000, birth: '1992-11-05' },
-  { name: 'Dewi Lestari',    job: 'Staff',      org: 'Accounting',                wage: 110000, birth: '1997-06-20' },
-  { name: 'Rudi Hartono',    job: 'Teknisi',    org: 'Produksi',                  wage: 130000, birth: '1990-01-28' },
-  { name: 'Nur Hasanah',     job: 'Admin',      org: 'Gudang',                    wage: 100000, birth: '1999-09-14' },
-  { name: 'Agus Setiawan',   job: 'Staff',      org: 'Produksi',                  wage: 115000, birth: '1994-04-02' },
-  { name: 'Rina Marlina',    job: 'Supervisor', org: 'Gudang',                    wage: 145000, birth: '1993-12-30' },
-  { name: 'Joko Prasetyo',   job: 'Teknisi',    org: 'Information & Technology',  wage: 135000, birth: '1996-07-17' },
-  { name: 'Maya Sari',       job: 'Staff',      org: 'Business Development',      wage: 105000, birth: '2000-02-09' },
-  { name: 'Hendra Gunawan',  job: 'Manager',    org: 'Produksi',                  wage: 210000, birth: '1988-10-23' },
-  { name: 'Lina Kusuma',     job: 'Admin',      org: 'Accounting',                wage: 100000, birth: '1998-05-06' }
+  { name: 'Budi Santoso',    job: 'Staff',      org: 'Accounting',                wage: 110000, birth: '1995-08-01', join: '2021-02-15' },
+  { name: 'Siti Aminah',     job: 'Supervisor', org: 'Business Development',      wage: 150000, birth: '1998-03-12', join: '2019-07-01', notes: 'Naik dari Staff ke Supervisor pada 2023.' },
+  { name: 'Andi Wijaya',     job: 'Manager',    org: 'Information & Technology',  wage: 200000, birth: '1992-11-05', join: '2018-03-05' },
+  { name: 'Dewi Lestari',    job: 'Staff',      org: 'Accounting',                wage: 110000, birth: '1997-06-20', join: '2022-09-12' },
+  { name: 'Rudi Hartono',    job: 'Teknisi',    org: 'Produksi',                  wage: 130000, birth: '1990-01-28', join: '2018-11-19', notes: 'Jam kerja lebih pagi, mengikuti giliran mesin produksi.' },
+  { name: 'Nur Hasanah',     job: 'Admin',      org: 'Gudang',                    wage: 100000, birth: '1999-09-14', join: '2023-01-09' },
+  { name: 'Agus Setiawan',   job: 'Staff',      org: 'Produksi',                  wage: 115000, birth: '1994-04-02', join: '2020-06-22' },
+  { name: 'Rina Marlina',    job: 'Supervisor', org: 'Gudang',                    wage: 145000, birth: '1993-12-30', join: '2019-04-08' },
+  { name: 'Joko Prasetyo',   job: 'Teknisi',    org: 'Information & Technology',  wage: 135000, birth: '1996-07-17', join: '2021-10-04' },
+  { name: 'Maya Sari',       job: 'Staff',      org: 'Business Development',      wage: 105000, birth: '2000-02-09', join: '2024-05-20', notes: 'Masih dalam masa percobaan yang diperpanjang.' },
+  { name: 'Hendra Gunawan',  job: 'Manager',    org: 'Produksi',                  wage: 210000, birth: '1988-10-23', join: '2018-01-15' },
+  { name: 'Lina Kusuma',     job: 'Admin',      org: 'Accounting',                wage: 100000, birth: '1998-05-06', join: '2026-02-02', notes: 'Karyawan paling baru, orientasi selesai Maret.' }
 ];
 
 /* ---------------- Pengosongan ---------------- */
@@ -179,12 +183,12 @@ function seedLookup(table, names, now) {
 
 function seedEmployees(jobIds, orgIds, now) {
   const insert = db.prepare(`
-    INSERT INTO employees (name, daily_wage, birth_date, active, created_at, employee_code, job_id, organization_id)
-    VALUES (?, ?, ?, 1, ?, ?, ?, ?)
+    INSERT INTO employees (name, daily_wage, birth_date, join_date, notes, active, created_at, employee_code, job_id, organization_id)
+    VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, ?)
   `);
   return EMPLOYEES.map((e, i) => {
     const code = `TDI-${pad2(i + 1).padStart(3, '0')}`;
-    const info = insert.run(e.name, e.wage, e.birth, now, code, jobIds[e.job], orgIds[e.org]);
+    const info = insert.run(e.name, e.wage, e.birth, e.join || null, e.notes || null, now, code, jobIds[e.job], orgIds[e.org]);
     return { ...e, id: Number(info.lastInsertRowid), code };
   });
 }

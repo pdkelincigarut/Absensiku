@@ -277,8 +277,17 @@ async function openEmployeeModal(employeeId) {
           <input required type="number" min="0" step="1000" name="dailyWage" value="${emp ? emp.dailyWage : ''}" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
         </div>
         <div>
+          <label class="text-sm text-slate-500 block mb-1">Tanggal Masuk (opsional)</label>
+          <input type="date" name="joinDate" value="${emp && emp.joinDate ? emp.joinDate : ''}" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+        </div>
+        <div>
           <label class="text-sm text-slate-500 block mb-1">Tanggal Lahir (opsional)</label>
           <input type="date" name="birthDate" value="${emp && emp.birthDate ? emp.birthDate : ''}" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+        </div>
+        <div>
+          <label class="text-sm text-slate-500 block mb-1">Catatan (opsional)</label>
+          <textarea name="notes" rows="3" placeholder="Misalnya: masa percobaan sampai Desember, atau kontrak diperpanjang setiap tahun."
+                    class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm">${emp && emp.notes ? escapeHtml(emp.notes) : ''}</textarea>
         </div>
         <label class="flex items-center gap-2 text-sm text-slate-600">
           <input type="checkbox" name="active" ${!isEdit || emp.active ? 'checked' : ''} class="accent-klc-600" />
@@ -352,6 +361,8 @@ async function openEmployeeModal(employeeId) {
     record.organizationId = fd.get('organizationId') ? Number(fd.get('organizationId')) : null;
     if (photoChange !== undefined) record.photo = photoChange;
     record.birthDate = fd.get('birthDate') || null;
+    record.joinDate = fd.get('joinDate') || null;
+    record.notes = (fd.get('notes') || '').trim() || null;
     record.active = fd.get('active') === 'on';
 
     const errorEl = document.getElementById('form-error');

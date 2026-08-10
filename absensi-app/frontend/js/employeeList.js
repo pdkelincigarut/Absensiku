@@ -18,6 +18,7 @@ const EMPLOYEE_SORT_KEYS = {
   job: emp => (emp.job ? emp.job.name : ''),
   organization: emp => (emp.organization ? emp.organization.name : ''),
   wage: emp => (typeof emp.dailyWage === 'number' ? emp.dailyWage : null),
+  joinDate: emp => emp.joinDate || '',
   birthDate: emp => emp.birthDate || '',
   status: emp => (emp.active ? 'Aktif' : 'Nonaktif')
 };
@@ -111,6 +112,7 @@ function renderEmployeeListTab(employees) {
               ${header('job', 'Jabatan')}
               ${header('organization', 'Divisi')}
               ${header('wage', 'Upah Harian')}
+              ${header('joinDate', 'Tanggal Masuk')}
               ${header('birthDate', 'Tanggal Lahir')}
               ${header('status', 'Status')}
               <th class="px-4 py-2.5 font-medium text-right">Aksi</th>
@@ -160,6 +162,7 @@ function renderEmployeeListTab(employees) {
           <td class="px-4 py-2.5 text-slate-600">${emp.job ? escapeHtml(emp.job.name) : '—'}</td>
           <td class="px-4 py-2.5 text-slate-600">${emp.organization ? escapeHtml(emp.organization.name) : '—'}</td>
           <td class="px-4 py-2.5 text-slate-700">${formatRupiah(emp.dailyWage)}</td>
+          <td class="px-4 py-2.5 text-slate-500">${emp.joinDate ? formatTanggalIndo(emp.joinDate) : '—'}</td>
           <td class="px-4 py-2.5 text-slate-500">${emp.birthDate ? formatTanggalIndo(emp.birthDate) : '—'}</td>
           <td class="px-4 py-2.5">
             <span class="text-xs font-medium px-2.5 py-1 rounded-full border ${emp.active ? 'bg-emerald-100 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-500 border-slate-200'}">${emp.active ? 'Aktif' : 'Nonaktif'}</span>
@@ -218,7 +221,7 @@ function renderEmployeeListTab(employees) {
 }
 
 function exportEmployeeCsv(rows) {
-  const csvRows = [['Employee ID', 'Nama', 'Jabatan', 'Divisi', 'Upah Harian', 'Tanggal Lahir', 'Status']];
+  const csvRows = [['Employee ID', 'Nama', 'Jabatan', 'Divisi', 'Upah Harian', 'Tanggal Masuk', 'Tanggal Lahir', 'Status', 'Catatan']];
   rows.forEach(emp => {
     csvRows.push([
       emp.employeeCode || '',
@@ -226,8 +229,12 @@ function exportEmployeeCsv(rows) {
       emp.job ? emp.job.name : '',
       emp.organization ? emp.organization.name : '',
       emp.dailyWage,
+      emp.joinDate || '',
       emp.birthDate || '',
-      emp.active ? 'Aktif' : 'Nonaktif'
+      emp.active ? 'Aktif' : 'Nonaktif',
+      // Catatan tidak ditampilkan di tabel (bisa panjang dan membuat baris
+      // tinggi), tapi ikut di unduhan supaya tidak hilang begitu saja.
+      emp.notes || ''
     ]);
   });
 
