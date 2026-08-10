@@ -21,6 +21,15 @@ function formatRupiah(n) {
   return 'Rp' + Math.round(n || 0).toLocaleString('id-ID');
 }
 
+/* Jumlah hari kerja sebulan yang dipakai form karyawan untuk menghubungkan
+   Upah Harian dengan Upah Bulanan. Ditetapkan owner: 26, mengikuti jadwal
+   perusahaan yang Senin-Sabtu.
+
+   Angka ini TIDAK dipakai perhitungan gaji. Laporan gaji menghitung dari
+   hari hadir yang sebenarnya, jadi mengubah nilai ini hanya mengubah cara
+   mengisi form, bukan besaran gaji siapa pun. */
+const WORKDAYS_PER_MONTH = 26;
+
 function dateToStr(d) {
   return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
 }
@@ -272,10 +281,20 @@ async function openEmployeeModal(employeeId) {
           </select>
           ${emptyHint(organizations)}
         </div>
-        <div>
-          <label class="text-sm text-slate-500 block mb-1">Upah Harian (Rp)</label>
-          <input required type="number" min="0" step="1000" name="dailyWage" value="${emp ? emp.dailyWage : ''}" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+        <!-- Dua kotak untuk satu nilai yang sama. Yang DISIMPAN hanya upah
+             harian -- itu yang dipakai perhitungan gaji. Upah bulanan cuma
+             cara lain mengisinya, jadi keduanya tidak mungkin berbeda isi. -->
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="text-sm text-slate-500 block mb-1">Upah Harian (Rp)</label>
+            <input required type="number" min="0" step="1000" name="dailyWage" value="${emp ? emp.dailyWage : ''}" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+          </div>
+          <div>
+            <label class="text-sm text-slate-500 block mb-1">Upah Bulanan (Rp)</label>
+            <input type="number" min="0" step="1000" name="monthlyWage" value="${emp && emp.dailyWage ? emp.dailyWage * WORKDAYS_PER_MONTH : ''}" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+          </div>
         </div>
+        <p class="text-xs text-slate-400 -mt-1">Terhubung otomatis: ${WORKDAYS_PER_MONTH} hari kerja sebulan. Mengisi salah satu langsung mengisi yang lain.</p>
         <div>
           <label class="text-sm text-slate-500 block mb-1">Tanggal Masuk (opsional)</label>
           <input type="date" name="joinDate" value="${emp && emp.joinDate ? emp.joinDate : ''}" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
@@ -304,6 +323,32 @@ async function openEmployeeModal(employeeId) {
   `);
 
   document.getElementById('btn-cancel').addEventListener('click', closeModal);
+
+  /* Upah harian dan bulanan saling mengisi. Yang diperbarui hanya kotak
+     SEBERANGNYA, tidak pernah kotak yang sedang diketik -- kalau kotak yang
+     sedang diketik ikut ditulis ulang, angka akan melompat dan kursor
+     berpindah ke ujung di tengah pengetikan.
+
+     Pembulatan dari bulanan ke harian bisa membuat hasil kalinya kembali
+     meleset sedikit (mis. 3.000.000 / 26 = 115.385 lalu x26 = 3.000.010).
+     Nilai yang diketik owner sengaja dibiarkan apa adanya; yang disimpan
+     tetap upah harian, dan itu yang dipakai perhitungan gaji. */
+  const inputHarian = document.querySelector('#form-emp [name="dailyWage"]');
+  const inputBulanan = document.querySelector('#form-emp [name="monthlyWage"]');
+
+  inputHarian.addEventListener('input', () => {
+    const harian = Number(inputHarian.value);
+    inputBulanan.value = inputHarian.value === '' || !Number.isFinite(harian)
+      ? ''
+      : Math.round(harian * WORKDAYS_PER_MONTH);
+  });
+
+  inputBulanan.addEventListener('input', () => {
+    const bulanan = Number(inputBulanan.value);
+    inputHarian.value = inputBulanan.value === '' || !Number.isFinite(bulanan)
+      ? ''
+      : Math.round(bulanan / WORKDAYS_PER_MONTH);
+  });
 
   /* undefined = pengguna tidak menyentuh foto (jangan diubah),
      null = minta dihapus, string = data URL foto baru. Pembedaan ini penting:
