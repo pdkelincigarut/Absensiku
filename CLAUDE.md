@@ -65,7 +65,7 @@ Bagian ini memisahkan **yang sudah jalan di kode** dari **yang masih rencana**. 
 - **Setiap route yang menulis data wajib memanggil `recordAudit`.** Log yang bolong berbohong lewat kekosongannya — pembaca menyimpulkan "tidak ada yang berubah" padahal cuma tidak dicatat.
 - **`audit_log` hanya dibaca.** Jangan pernah buat endpoint ubah atau hapus untuknya.
 - Alasan wajib **hanya** saat mengubah baris yang sudah ada. Mewajibkannya di input pertama akan menghasilkan alasan "." yang menyamarkan koreksi sungguhan.
-- **Hari sebelum  bukan alpa.** Karyawan yang bergabung di tengah periode tidak boleh terlihat bolos pada masa sebelum dia bekerja. Absensi yang terlanjur tercatat sebelum tanggal itu TETAP dibayar -- catatan kehadiran adalah bukti, bukan tebakan.
+- **Hari sebelum `employees.join_date` bukan alpa.** Karyawan yang bergabung di tengah periode tidak boleh terlihat bolos pada masa sebelum dia bekerja, dan gajinya tidak boleh terpotong karenanya. Absensi yang terlanjur tercatat sebelum tanggal itu **tetap dibayar** — catatan kehadiran adalah bukti, bukan tebakan. Karyawan tanpa `join_date` dihitung seperti sebelumnya (seluruh periode).
 - Jam absen selalu dari server. Jangan pernah terima `checkInTime` / `checkOutTime` dari body request, dan **jangan stempel ulang `check_in_time` yang sudah terisi** — potongan keterlambatan dihitung dari kolom itu.
 - **Desktop saja.** Boleh memakai tata letak yang butuh layar lebar. Lebar minimum tanpa geser mendatar: Laporan Gaji 1173px, Monitoring 1076px, sisanya di bawah 1000px. Tabel tetap dibungkus `overflow-x-auto` supaya layar yang lebih sempit masih bisa dipakai, tapi tampilan khusus ponsel bukan tujuan.
 
