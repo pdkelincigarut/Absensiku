@@ -438,6 +438,25 @@ function renderAttendancePanel(containerEl, emp, rec, date, accountName, onSaved
 
 /* ---------------- Riwayat Absensi ---------------- */
 
+/* Pilihan filter status pada Riwayat Absensi.
+
+   "tidak-hadir" adalah alasan filter ini ada: menjawab "siapa saja yang tidak
+   masuk bulan ini" dalam satu klik. Urutannya izin dulu, lalu sakit, lalu
+   alpa, masing-masing dari tanggal paling awal -- bukan tanggal terbaru
+   seperti tampilan biasa, karena yang dicari adalah menelusuri sebulan dari
+   awal, bukan melihat kejadian terakhir. */
+const HISTORY_STATUS_FILTERS = [
+  { value: 'all', label: 'Semua status' },
+  { value: 'tidak-hadir', label: 'Tidak hadir (izin, sakit, alpa)' },
+  { value: 'izin', label: 'Izin saja' },
+  { value: 'sakit', label: 'Sakit saja' },
+  { value: 'alpa', label: 'Alpa saja' },
+  { value: 'hadir', label: 'Hadir saja' }
+];
+
+const HISTORY_ABSENT_ORDER = { izin: 0, sakit: 1, alpa: 2 };
+const HISTORY_PER_PAGE_OPTIONS = [10, 15, 25, 50];
+
 function renderHistoryTable(containerEl, employees, state) {
   if (!containerEl) return;
   if (!state.month) {
@@ -445,14 +464,23 @@ function renderHistoryTable(containerEl, employees, state) {
     state.month = d.getFullYear() + '-' + pad2(d.getMonth() + 1);
   }
   if (!state.employeeId) state.employeeId = 'all';
+  if (!state.status) state.status = 'all';
+  if (!state.perPage) state.perPage = 15;
+  if (!state.page) state.page = 1;
 
   containerEl.innerHTML = `
-    <div class="flex flex-col sm:flex-row gap-3 mb-4">
+    <div class="flex flex-col sm:flex-row gap-3 mb-4 on-brand-bg">
       <div>
         <label class="text-sm text-slate-500 block mb-1">Karyawan</label>
         <select id="filter-emp" class="border border-slate-300 rounded-lg px-3 py-1.5 text-sm w-full sm:w-56">
           <option value="all">Semua Karyawan</option>
           ${employees.map(e => `<option value="${e.id}" ${state.employeeId === String(e.id) ? 'selected' : ''}>${escapeHtml(e.name)}</option>`).join('')}
+        </select>
+      </div>
+      <div>
+        <label class="text-sm text-slate-500 block mb-1">Status</label>
+        <select id="filter-status" class="border border-slate-300 rounded-lg px-3 py-1.5 text-sm w-full sm:w-56">
+          ${HISTORY_STATUS_FILTERS.map(f => `<option value="${f.value}" ${state.status === f.value ? 'selected' : ''}>${f.label}</option>`).join('')}
         </select>
       </div>
       <div>
@@ -477,19 +505,41 @@ function renderHistoryTable(containerEl, employees, state) {
           <tbody id="hist-tbody" class="divide-y divide-slate-100"></tbody>
         </table>
       </div>
+      <div id="hist-pager" class="px-4 py-3 border-t border-slate-200 flex flex-col sm:flex-row sm:items-center gap-3 text-sm"></div>
     </div>
   `;
 
-  document.getElementById('filter-emp').addEventListener('change', (e) => {
-    state.employeeId = e.target.value;
+  /* Setiap perubahan filter mengembalikan ke halaman 1. Tanpa ini, mengganti
+     bulan sambil berada di halaman 4 bisa mendarat di tabel kosong padahal
+     datanya ada. */
+  const ubahFilter = (ubah) => {
+    ubah();
+    state.page = 1;
     renderHistoryRows(state);
-  });
-  document.getElementById('filter-month').addEventListener('change', (e) => {
-    state.month = e.target.value;
-    renderHistoryRows(state);
-  });
+  };
+
+  document.getElementById('filter-emp').addEventListener('change', (e) => ubahFilter(() => { state.employeeId = e.target.value; }));
+  document.getElementById('filter-status').addEventListener('change', (e) => ubahFilter(() => { state.status = e.target.value; }));
+  document.getElementById('filter-month').addEventListener('change', (e) => ubahFilter(() => { state.month = e.target.value; }));
 
   renderHistoryRows(state);
+}
+
+/* Menyaring dan mengurutkan sesuai status yang dipilih. Data mentah dari
+   server datang urut tanggal menurun; hanya tampilan "tidak hadir" dan
+   status tunggal yang dibalik jadi menaik. */
+function applyHistoryStatusFilter(records, status) {
+  if (status === 'all') return records;
+
+  if (status === 'tidak-hadir') {
+    return records
+      .filter(r => r.status !== 'hadir')
+      .sort((a, b) =>
+        (HISTORY_ABSENT_ORDER[a.status] - HISTORY_ABSENT_ORDER[b.status]) ||
+        a.date.localeCompare(b.date));
+  }
+
+  return records.filter(r => r.status === status).sort((a, b) => a.date.localeCompare(b.date));
 }
 
 async function renderHistoryRows(state) {
@@ -508,12 +558,25 @@ async function renderHistoryRows(state) {
     return;
   }
 
-  if (records.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="7" class="px-4 py-8 text-center text-slate-400">Tidak ada data pada periode ini.</td></tr>`;
+  const terpilih = applyHistoryStatusFilter(records, state.status);
+
+  const totalHalaman = Math.max(1, Math.ceil(terpilih.length / state.perPage));
+  // Halaman bisa melewati batas setelah filter dipersempit; ditarik kembali.
+  if (state.page > totalHalaman) state.page = totalHalaman;
+  const mulai = (state.page - 1) * state.perPage;
+  const halamanIni = terpilih.slice(mulai, mulai + state.perPage);
+
+  renderHistoryPager(state, terpilih.length, halamanIni.length, mulai, totalHalaman);
+
+  if (terpilih.length === 0) {
+    const pesan = state.status === 'all'
+      ? 'Tidak ada data pada periode ini.'
+      : 'Tidak ada data dengan status itu pada periode ini.';
+    tbody.innerHTML = `<tr><td colspan="7" class="px-4 py-8 text-center text-slate-400">${pesan}</td></tr>`;
     return;
   }
 
-  tbody.innerHTML = records.map(r => `
+  tbody.innerHTML = halamanIni.map(r => `
     <tr>
       <td class="px-4 py-2.5 text-slate-700">${formatTanggalIndo(r.date)}</td>
       <td class="px-4 py-2.5 text-slate-700">${escapeHtml(r.employeeName || '-')}</td>
@@ -524,4 +587,38 @@ async function renderHistoryRows(state) {
       <td class="px-4 py-2.5 text-slate-500">${escapeHtml(r.note || '-')}</td>
     </tr>
   `).join('');
+}
+
+/* Pager riwayat. Bentuknya sengaja dibuat sama persis dengan pager di tab
+   Data Karyawan supaya keduanya tidak terasa seperti dua komponen berbeda. */
+function renderHistoryPager(state, total, jumlahDiHalaman, mulai, totalHalaman) {
+  const pager = document.getElementById('hist-pager');
+  if (!pager) return;
+
+  pager.innerHTML = `
+    <div class="flex items-center gap-2">
+      <label for="hist-per-page" class="text-slate-500">Baris per halaman</label>
+      <select id="hist-per-page" class="border border-slate-300 rounded-lg px-2 py-1 text-sm bg-white">
+        ${HISTORY_PER_PAGE_OPTIONS.map(n => `<option value="${n}" ${state.perPage === n ? 'selected' : ''}>${n}</option>`).join('')}
+      </select>
+    </div>
+    <p class="text-slate-500">${total === 0 ? 'Tidak ada data' : `Menampilkan ${mulai + 1}–${mulai + jumlahDiHalaman} dari ${total}`}</p>
+    <div class="flex items-center gap-2 sm:ml-auto">
+      <button id="btn-hist-prev" class="px-2.5 py-1 rounded-lg border border-slate-300 text-slate-600 disabled:text-slate-300 disabled:border-slate-200" ${state.page <= 1 ? 'disabled' : ''}>&lsaquo;</button>
+      <span class="text-slate-500">Halaman ${state.page} dari ${totalHalaman}</span>
+      <button id="btn-hist-next" class="px-2.5 py-1 rounded-lg border border-slate-300 text-slate-600 disabled:text-slate-300 disabled:border-slate-200" ${state.page >= totalHalaman ? 'disabled' : ''}>&rsaquo;</button>
+    </div>
+  `;
+
+  document.getElementById('hist-per-page').addEventListener('change', (e) => {
+    state.perPage = Number(e.target.value);
+    state.page = 1;
+    renderHistoryRows(state);
+  });
+  document.getElementById('btn-hist-prev').addEventListener('click', () => {
+    if (state.page > 1) { state.page--; renderHistoryRows(state); }
+  });
+  document.getElementById('btn-hist-next').addEventListener('click', () => {
+    if (state.page < totalHalaman) { state.page++; renderHistoryRows(state); }
+  });
 }
