@@ -116,12 +116,14 @@ function renderLogin(errorMsg) {
               </form>
             </div>
 
-            <div class="mt-5 text-center text-xs text-slate-400 space-y-0.5">
-              <p>Demo HR Admin: <span class="font-plex">hradmin / hr123</span></p>
-              <p>Demo Owner: <span class="font-plex">owner / owner123</span></p>
-            </div>
+            <!-- Kredensial demo SENGAJA tidak lagi dicetak di sini. Halaman
+                 ini terbuka untuk siapa pun yang bisa menjangkau server di
+                 jaringan kantor, dan mencetak username beserta passwordnya
+                 sama saja dengan tidak mengunci pintunya.
 
-            <p class="mt-4 text-center text-xs tracking-wide text-slate-500">
+                 Untuk peragaan, kredensialnya dicetak oleh perintah seed di
+                 Terminal, dan tercatat di panduan deploy. -->
+            <p class="mt-5 text-center text-xs tracking-wide text-slate-500">
               <span class="font-display font-bold text-slate-700">KLC</span> CORP.
             </p>
           </div>

@@ -5,16 +5,17 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>AbsensiKu — Absensi &amp; Penggajian Karyawan</title>
 
-  <!-- Poppins (header) & IBM Plex Mono (sub) sesuai panduan merek KLC.
-       Kalau server kantor tanpa internet, font gagal dimuat dan turun ke
-       font sistem -- tata letak tetap utuh, hanya hurufnya berbeda.
-       Catatan: Tailwind juga sudah dari CDN, jadi ketergantungan internet
-       ini bukan hal baru. -->
-  <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <!-- Tailwind dan font disajikan dari dalam aplikasi sendiri, BUKAN dari
+       CDN. Aplikasi ini berjalan di jaringan kantor; kalau internetnya
+       putus atau CDN-nya diblokir, versi CDN membuat halaman terbuka tanpa
+       gaya sama sekali -- bukan sekadar font berbeda, tapi tidak terpakai.
+       Sekarang tidak ada satu pun permintaan keluar saat halaman dibuka.
 
-  <script src="https://cdn.tailwindcss.com"></script>
+       vendor/tailwind.js adalah runtime Tailwind versi 3.4.16 yang sama
+       persis dengan yang dulu diambil dari cdn.tailwindcss.com, jadi
+       konfigurasi di bawah tetap berlaku dan tidak ada langkah build. -->
+  <link href="vendor/fonts.css" rel="stylesheet" />
+  <script src="vendor/tailwind.js"></script>
   <script>
     /* Warna diambil langsung dari mockup dan readme aset, bukan ditebak:
        merah latar #be0000 (sama persis dengan latar berkas logo, sehingga

@@ -30,7 +30,20 @@ cd Absensiku/absensi-app/backend
 npm install
 npm run seed
 ```
-`npm run seed` hanya perlu dijalankan **sekali** (mengisi akun demo `hradmin`/`hr123` dan `owner`/`owner123` + 3 karyawan contoh — ganti/tambah data karyawan sungguhan lewat aplikasi setelah jalan, lewat tab Data Karyawan).
+`npm run seed` hanya perlu dijalankan **sekali** (mengisi akun awal `hradmin`/`hr123` dan `owner`/`owner123` + 3 karyawan contoh — ganti/tambah data karyawan sungguhan lewat aplikasi setelah jalan, lewat tab Data Karyawan).
+
+> ⛔ **Jangan pernah menjalankan `npm run seed:demo` di server ini.** Perintah itu **menghapus seluruh isi database** — termasuk seluruh riwayat absensi — lalu menggantinya dengan data contoh untuk presentasi. Perintah itu hanya untuk komputer pengembangan.
+
+## 3b. Ganti password kedua akun — WAJIB
+
+Password `hr123` dan `owner123` tertulis di repositori publik. Selama belum diganti, **siapa pun di jaringan kantor yang membuka repositori bisa masuk sebagai Owner dan melihat seluruh data gaji.**
+
+```bash
+npm run set-password
+```
+Perintah ini menampilkan daftar akun, menanyakan username mana yang mau diganti, lalu meminta password baru dua kali (ketikannya disembunyikan). Jalankan **dua kali** — sekali untuk `owner`, sekali untuk `hradmin`.
+
+Semua sesi login yang sedang berjalan otomatis diputus setiap kali password diganti.
 
 ## 4. Set kunci keamanan sesi (SESSION_SECRET)
 
@@ -80,13 +93,17 @@ Ini perlu dilakukan Owner sendiri langsung di iMac (bukan lewat Terminal/Claude)
 
 Di **System Settings → Lock Screen / Battery**, matikan mode tidur otomatis (atau minimal aktifkan **"Prevent automatic sleeping on power adapter when the display is off"**) — kalau iMac tidur penuh, server berhenti bisa diakses dari jaringan.
 
-## 9. Akses dari PC HR (Windows)
+## 9. Akses dari PC client (Windows)
 
-Tidak perlu instal apa pun — buka browser apa saja, ketik:
+Tidak perlu instal apa pun di PC client — buka browser apa saja, ketik:
 ```
 http://<IP-iMac-dari-langkah-6>:3000
 ```
 contoh: `http://192.168.1.42:3000`
+
+Berlaku sama untuk berapa pun jumlah PC client. Sarankan simpan alamatnya sebagai bookmark supaya tidak perlu diketik ulang tiap hari.
+
+**Aplikasi tidak butuh internet.** Tailwind dan seluruh berkas font disajikan dari dalam aplikasi sendiri (`frontend/vendor/`), jadi tampilannya tetap utuh walau jaringan kantor sedang tanpa internet. Yang dibutuhkan hanya jaringan lokal antara PC client dan iMac.
 
 ## 10. Update aplikasi di kemudian hari
 

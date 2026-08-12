@@ -8,6 +8,7 @@
     "start": "node server.js",
     "seed": "node seed.js",
     "seed:demo": "node seedDemo.js",
+    "set-password": "node setPassword.js",
     "test": "node --test \"test/*.test.js\""
   },
   "engines": {
