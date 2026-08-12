@@ -1,6 +1,7 @@
 .claude/settings.local.json
 absensi-app/backend/node_modules/
 absensi-app/backend/data/*.db
+absensi-app/backend/data/backups/
 absensi-app/backend/data/*.db-journal
 absensi-app/backend/data/*.db-wal
 absensi-app/backend/data/*.db-shm

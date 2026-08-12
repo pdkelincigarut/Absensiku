@@ -122,4 +122,54 @@ Satu-satunya sumber data ada di file:
 ```
 ~/Absensiku/absensi-app/backend/data/absensiku.db
 ```
-Sarankan salin file ini secara berkala (mis. ke Time Machine atau cloud storage) sebagai backup.
+
+### Backup harian otomatis
+
+Server membuat salinan database **satu kali setiap hari, otomatis** — tidak perlu menyiapkan penjadwal apa pun di macOS. Salinannya bernama tanggal:
+
+```
+data/backups/absensiku-2026-08-12.db
+data/backups/absensiku-2026-08-11.db
+...
+```
+
+Aturannya:
+- **Satu salinan per hari.** Kalau hari itu sudah ada salinannya, server tidak membuat lagi.
+- **Maksimal 30 salinan.** Begitu jumlahnya melewati 30, yang paling lama otomatis dihapus, sehingga folder selalu berisi 30 hari terakhir.
+- Server memeriksa setiap jam, bukan menunggu tepat 24 jam. Jadi kalau iMac sempat mati semalaman atau server di-restart, salinan hari itu tetap dibuat begitu server hidup lagi.
+- Kegagalan backup **tidak** mematikan server — pesannya muncul di `pm2 logs absensiku`.
+
+Salinan dibuat dengan `VACUUM INTO`, bukan menyalin berkas `.db` begitu saja. Database ini berjalan dalam mode WAL: menyalin berkasnya langsung saat server jalan bisa menghasilkan salinan yang isinya tertinggal atau rusak.
+
+### Menyimpan backup di luar iMac — sangat disarankan
+
+Secara bawaan salinannya ada di disk yang sama dengan aslinya. Itu menolong saat data salah terhapus, **tapi tidak menolong saat disk iMac-nya rusak.** Arahkan ke hard disk eksternal atau folder yang tersinkron ke cloud lewat `BACKUP_DIR` di `ecosystem.config.js`:
+
+```js
+env: {
+  PORT: 3000,
+  SESSION_SECRET: '...',
+  BACKUP_DIR: '/Volumes/BackupKantor/absensiku'
+}
+```
+lalu `pm2 restart absensiku`.
+
+Kalau disk tujuannya sedang dicabut, backup hari itu gagal dan tercatat di log — server dan absensi tetap berjalan normal.
+
+### Backup manual
+
+Kapan saja, mis. sebelum melakukan perubahan besar:
+```bash
+npm run backup             # dilewati kalau hari ini sudah ada
+npm run backup -- --force  # timpa dengan kondisi terbaru
+```
+
+### Memulihkan dari backup
+
+1. Hentikan server: `pm2 stop absensiku`
+2. Salin berkas backup menimpa yang asli:
+   ```bash
+   cp data/backups/absensiku-2026-08-12.db data/absensiku.db
+   ```
+3. Hapus sisa berkas WAL kalau ada: `rm -f data/absensiku.db-wal data/absensiku.db-shm`
+4. Jalankan lagi: `pm2 start absensiku`

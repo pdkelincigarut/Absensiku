@@ -47,4 +47,9 @@ app.use(express.static(path.join(__dirname, '..', 'frontend')));
 
 app.listen(PORT, () => {
   console.log(`AbsensiKu backend jalan di http://localhost:${PORT}`);
+
+  /* Backup harian dijalankan dari dalam server supaya owner tidak perlu
+     menyiapkan penjadwal terpisah di macOS. Server memang sudah dijaga
+     hidup terus oleh pm2, jadi inilah tempat yang paling andal. */
+  require('./backup').mulaiJadwalBackup();
 });

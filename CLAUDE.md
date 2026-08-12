@@ -38,6 +38,7 @@ Bagian ini memisahkan **yang sudah jalan di kode** dari **yang masih rencana**. 
 | Soft delete karyawan | `employees.deleted_at`; laporan gaji periode lampau tidak bergeser |
 | Tanggal masuk & catatan | `employees.join_date` / `notes`; hari sebelum tanggal masuk tidak dihitung alpa di laporan gaji |
 | Export CSV | Laporan gaji (`owner.js`) dan daftar karyawan (`employeeList.js`), dibuat di browser pakai Blob + BOM UTF-8 supaya rapi dibuka Excel |
+| Backup harian | Otomatis dari server, satu salinan per hari, disimpan 30 terakhir. Dibuat dengan VACUUM INTO karena database mode WAL |
 | Data demo | `seedDemo.js` — riwayat sebulan lebih untuk presentasi, terpisah dari `seed.js` |
 
 ### Belum Dikerjakan (Roadmap)
@@ -80,7 +81,7 @@ Bagian ini memisahkan **yang sudah jalan di kode** dari **yang masih rencana**. 
 
 **Frontend** (`absensi-app/frontend/`)
 - Vanilla JS, **tanpa build step / bundler / framework**
-- Tailwind lewat CDN (`cdn.tailwindcss.com`) di `index.html`
+- Tailwind runtime **disajikan dari dalam aplikasi** (`frontend/vendor/tailwind.js`, versi 3.4.16), bukan dari CDN — aplikasi berjalan di jaringan kantor yang belum tentu punya internet. Konfigurasinya tetap inline di `index.html`, tidak ada build step. Font Poppins & IBM Plex Mono juga lokal di `frontend/vendor/fonts/`. **Halaman tidak melakukan satu pun permintaan keluar.**
 - Semua file `js/*.js` dimuat sebagai `<script>` biasa dan berbagi scope global — urutan `<script>` di `index.html` itu penting (`storage.js` duluan, `app.js` terakhir)
 - Disajikan sebagai file statis oleh server Express yang sama (`express.static`), jadi satu proses & satu port untuk API + UI
 
