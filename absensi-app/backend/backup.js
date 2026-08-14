@@ -92,7 +92,7 @@ function backupHariIni({ paksa = false } = {}) {
 }
 
 /* Pemeriksaan berkala, bukan pengatur waktu 24 jam sekali. Server bisa
-   di-restart atau iMac-nya dimatikan semalaman; penjadwal yang menunggu
+   di-restart atau PC servernya dimatikan semalaman; penjadwal yang menunggu
    tepat 24 jam akan melewatkan harinya begitu saja. Memeriksa "apakah
    backup hari ini sudah ada" tiap jam selalu mengejar ketinggalan. */
 const SELANG_PERIKSA = 60 * 60 * 1000;

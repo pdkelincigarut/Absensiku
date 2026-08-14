@@ -131,7 +131,7 @@ countScheduledDays(schedule, holidaySet, startDate, endDate)
 
 `computeLateMinutes` menggantikan versi lama di `lateCalculator.js` yang membandingkan terhadap jam absolut. `computeDeduction` yang sudah ada tidak berubah.
 
-**Zona waktu:** seluruh perhitungan memakai string tanggal `YYYY-MM-DD` dan jam `HH:MM` apa adanya, tanpa objek `Date` bermuatan zona waktu — jadi tidak ada pergeseran hari. Satu-satunya tempat zona waktu berpengaruh adalah saat server menstempel jam masuk/pulang dari `new Date()`, yang mengikuti jam mesin. Ini didokumentasikan di [DEPLOY-MACOS.md](../../../absensi-app/backend/DEPLOY-MACOS.md) sebagai syarat: **iMac server wajib di-set zona waktu WIB.** Tidak ada konversi zona waktu di kode, karena aplikasi ini melayani satu kantor di satu zona waktu — menambahkan konversi hanya akan menambah cara untuk salah.
+**Zona waktu:** seluruh perhitungan memakai string tanggal `YYYY-MM-DD` dan jam `HH:MM` apa adanya, tanpa objek `Date` bermuatan zona waktu — jadi tidak ada pergeseran hari. Satu-satunya tempat zona waktu berpengaruh adalah saat server menstempel jam masuk/pulang dari `new Date()`, yang mengikuti jam mesin. Ini didokumentasikan di [DEPLOY-WINDOWS.md](../../../absensi-app/backend/DEPLOY-WINDOWS.md) sebagai syarat: **PC server wajib di-set zona waktu WIB.** Tidak ada konversi zona waktu di kode, karena aplikasi ini melayani satu kantor di satu zona waktu — menambahkan konversi hanya akan menambah cara untuk salah.
 
 ### 4.2 Endpoint baru
 

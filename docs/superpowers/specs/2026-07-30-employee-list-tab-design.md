@@ -23,7 +23,7 @@ Kolom **Attendance month** dari contoh juga tidak dipakai, dan tombol ikon (1) d
 
 ### 2.1 Disimpan di database, bukan sebagai berkas di disk
 
-Foto disimpan sebagai BLOB di tabel `employees`. Alasannya: [DEPLOY-MACOS.md](../../../absensi-app/backend/DEPLOY-MACOS.md) menyatakan satu-satunya sumber data adalah berkas `data/absensiku.db`, dan menyarankan menyalin berkas itu sebagai backup. Kalau foto ditaruh sebagai berkas terpisah di disk, panduan backup itu jadi salah tanpa ada yang menyadarinya — backup akan berjalan "sukses" tapi kehilangan semua foto. Untuk skala usaha kecil (puluhan karyawan, foto masing-masing puluhan KB) BLOB di SQLite sama sekali tidak masalah.
+Foto disimpan sebagai BLOB di tabel `employees`. Alasannya: [DEPLOY-WINDOWS.md](../../../absensi-app/backend/DEPLOY-WINDOWS.md) menyatakan satu-satunya sumber data adalah berkas `data/absensiku.db`, dan menyarankan menyalin berkas itu sebagai backup. Kalau foto ditaruh sebagai berkas terpisah di disk, panduan backup itu jadi salah tanpa ada yang menyadarinya — backup akan berjalan "sukses" tapi kehilangan semua foto. Untuk skala usaha kecil (puluhan karyawan, foto masing-masing puluhan KB) BLOB di SQLite sama sekali tidak masalah.
 
 ### 2.2 Diunggah sebagai data URL, bukan multipart
 

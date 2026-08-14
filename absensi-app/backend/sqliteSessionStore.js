@@ -1,7 +1,7 @@
 /* ============================================================
    sqliteSessionStore.js — Session store persisten di SQLite
    Menggantikan MemoryStore bawaan express-session supaya sesi
-   login tidak hilang setiap server di-restart (mis. iMac reboot/
+   login tidak hilang setiap server di-restart (mis. PC server reboot/
    tidur). Tanpa dependency tambahan — pakai koneksi node:sqlite
    yang sama dengan data lain, lewat db.js.
    ============================================================ */

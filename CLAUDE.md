@@ -56,7 +56,7 @@ Bagian ini memisahkan **yang sudah jalan di kode** dari **yang masih rencana**. 
 
 **Anti-fraud check-in** (login karyawan, kiosk, selfie, geolocation, device binding) — dibatalkan 2026-08-01, bukan ditunda. Karyawan tidak absen sendiri, jadi tidak ada alur yang bisa ditambal. Digantikan akuntabilitas HR di tabel "Sudah Jalan". Jangan hidupkan lagi tanpa keputusan baru soal apakah karyawan mulai absen sendiri.
 
-**Tampilan ponsel** — dibatalkan 2026-08-06 atas keputusan owner. Aplikasi ini **khusus desktop**: PC HR (Windows) dan iMac owner lewat browser di jaringan kantor, keduanya jauh di atas lebar yang dibutuhkan. Jangan habiskan waktu membuat tabel jadi kartu untuk layar sempit, menguji di lebar ponsel, atau mengganti `bg-fixed` demi Safari iOS.
+**Tampilan ponsel** — dibatalkan 2026-08-06 atas keputusan owner. Aplikasi ini **khusus desktop**: PC Windows (server) dan komputer client di jaringan kantor lewat browser, semuanya jauh di atas lebar yang dibutuhkan. Jangan habiskan waktu membuat tabel jadi kartu untuk layar sempit, menguji di lebar ponsel, atau mengganti `bg-fixed` demi Safari iOS.
 
 ## Aturan & Konvensi Wajib
 
@@ -116,8 +116,7 @@ absensi-app/
     routes/              # satu file per resource (bukan pola controller/model)
     test/                # *.test.js, node:test
     data/                # absensiku.db (gitignored)
-    ecosystem.config.js  # config pm2 untuk deploy
-    DEPLOY-MACOS.md      # panduan deploy ke iMac server kantor
+    DEPLOY-WINDOWS.md    # panduan deploy: server di PC Windows, client cukup browser
   frontend/
     index.html           # satu-satunya halaman HTML
     js/
@@ -195,4 +194,6 @@ Tidak ada `npm run dev` / hot reload — restart manual setelah ubah backend. Pe
 
 Migrasi jalan **otomatis** saat `db.js` di-require (jadi saat `npm start`/`npm test`), idempotent lewat tabel `_migrations`. Tidak ada command migrate terpisah.
 
-Deploy produksi pakai pm2 (`ecosystem.config.js`), langkah lengkap ada di `absensi-app/backend/DEPLOY-MACOS.md`.
+Deploy produksi: **server berjalan di PC Windows**, dihidupkan otomatis lewat Windows Task Scheduler (bukan pm2 — `pm2 startup` tidak didukung di Windows). Komputer client (iMac, PC lain) cukup membuka alamatnya di browser, tanpa instalasi. `SESSION_SECRET` dan `BACKUP_DIR` disimpan sebagai environment variable Windows, bukan di dalam berkas repo, supaya tidak tertimpa saat `git pull`. Langkah lengkap di `absensi-app/backend/DEPLOY-WINDOWS.md`.
+
+**Jam PC server menentukan gaji.** Jam masuk/pulang distempel dari `new Date()` di server, dan potongan telat dihitung dari situ — zona waktu PC server wajib benar (WIB). Ini syarat deploy, bukan detail kosmetik.
