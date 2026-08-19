@@ -97,19 +97,27 @@ function renderLogin(errorMsg) {
             </div>
 
             <div class="mt-6 rounded-2xl border border-slate-100 bg-slate-50/60 p-4 sm:p-5">
-              <div class="grid grid-cols-2 gap-1 mb-5 bg-slate-100 rounded-xl p-1">
+              <div class="grid grid-cols-3 gap-1 mb-5 bg-slate-100 rounded-xl p-1">
                 <button id="role-hr" class="role-btn py-2 rounded-lg text-sm font-medium transition"></button>
                 <button id="role-owner" class="role-btn py-2 rounded-lg text-sm font-medium transition"></button>
+                <button id="role-kiosk" class="role-btn py-2 rounded-lg text-sm font-medium transition"></button>
+              </div>
+
+              <!-- Panel Check In tidak punya form: memang tidak ada yang perlu
+                   diisi. Karyawan menekan satu tombol lalu mencari namanya. -->
+              <div id="kiosk-cta" class="hidden text-center">
+                <p class="text-sm text-slate-500 mb-4">Absen sendiri tanpa login. Cari nama Anda, lalu tekan tombol Check In.</p>
+                <button id="btn-open-kiosk" type="button" class="w-full py-2.5 rounded-lg bg-klc-600 hover:bg-klc-700 text-white font-semibold text-sm transition">Buka Panel Check In</button>
               </div>
 
               <form id="form-login" class="space-y-3">
                 <div>
                   <label class="text-sm text-slate-500 block mb-1">Username</label>
-                  <input required name="username" autocomplete="username" class="w-full bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-klc-600 focus:border-klc-600 transition" />
+                  <input required name="username" autocomplete="username" class="w-full bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus-visible:border-klc-600 transition" />
                 </div>
                 <div>
                   <label class="text-sm text-slate-500 block mb-1">Password</label>
-                  <input required type="password" name="password" autocomplete="current-password" class="w-full bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-klc-600 focus:border-klc-600 transition" />
+                  <input required type="password" name="password" autocomplete="current-password" class="w-full bg-white border border-slate-200 rounded-lg px-3 py-2.5 text-sm focus-visible:border-klc-600 transition" />
                 </div>
                 <p id="login-error" class="text-sm text-klc-600 ${errorMsg ? '' : 'hidden'}">${errorMsg || ''}</p>
                 <button type="submit" class="w-full py-2.5 rounded-lg bg-klc-600 hover:bg-klc-700 text-white font-semibold text-sm transition">Masuk</button>
@@ -133,17 +141,28 @@ function renderLogin(errorMsg) {
   `;
 
   const paintRoleButtons = () => {
-    const hBtn = document.getElementById('role-hr');
-    const oBtn = document.getElementById('role-owner');
-    hBtn.textContent = 'HR Admin';
-    oBtn.textContent = 'Owner / Admin';
-    hBtn.className = `role-btn py-2 rounded-lg text-sm font-medium transition ${selectedRole === 'hr' ? 'bg-white text-klc-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`;
-    oBtn.className = `role-btn py-2 rounded-lg text-sm font-medium transition ${selectedRole === 'owner' ? 'bg-white text-klc-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`;
+    const tombol = {
+      hr: [document.getElementById('role-hr'), 'HR Admin'],
+      owner: [document.getElementById('role-owner'), 'Owner'],
+      kiosk: [document.getElementById('role-kiosk'), 'Check In']
+    };
+    for (const [peran, [el, label]] of Object.entries(tombol)) {
+      el.textContent = label;
+      el.className = `role-btn py-2 rounded-lg text-sm font-medium transition ${selectedRole === peran ? 'bg-white text-klc-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`;
+    }
+    /* Username dan password disembunyikan saat Check In dipilih, bukan sekadar
+       dikosongkan: kolom yang tetap terlihat mengundang orang mengetik sesuatu
+       di sana, padahal kios tidak memakainya sama sekali. */
+    const kios = selectedRole === 'kiosk';
+    document.getElementById('form-login').classList.toggle('hidden', kios);
+    document.getElementById('kiosk-cta').classList.toggle('hidden', !kios);
   };
   paintRoleButtons();
 
   document.getElementById('role-hr').addEventListener('click', () => { selectedRole = 'hr'; paintRoleButtons(); });
   document.getElementById('role-owner').addEventListener('click', () => { selectedRole = 'owner'; paintRoleButtons(); });
+  document.getElementById('role-kiosk').addEventListener('click', () => { selectedRole = 'kiosk'; paintRoleButtons(); });
+  document.getElementById('btn-open-kiosk').addEventListener('click', () => renderKiosk());
 
   document.getElementById('form-login').addEventListener('submit', async (e) => {
     e.preventDefault();

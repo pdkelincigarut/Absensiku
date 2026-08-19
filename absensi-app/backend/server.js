@@ -38,6 +38,8 @@ app.use('/api/jobs', createLookupRouter({ table: 'jobs', employeeColumn: 'job_id
 app.use('/api/organizations', createLookupRouter({ table: 'organizations', employeeColumn: 'organization_id', label: 'Divisi' }));
 app.use('/api/work-schedules', require('./routes/workSchedules'));
 app.use('/api/holidays', require('./routes/holidays'));
+app.use('/api/kiosk', require('./routes/kiosk'));
+app.use('/api/face', require('./routes/face'));
 app.use('/api/attendance', require('./routes/attendance'));
 app.use('/api/payroll', require('./routes/payroll'));
 app.use('/api/late-policies', require('./routes/latePolicies'));
@@ -52,4 +54,8 @@ app.listen(PORT, () => {
      menyiapkan penjadwal terpisah di macOS. Server memang sudah dijaga
      hidup terus oleh pm2, jadi inilah tempat yang paling andal. */
   require('./backup').mulaiJadwalBackup();
+
+  /* Foto bukti absen ikut dipangkas di sini, bukan lewat penjadwal
+     terpisah, supaya cuma ada satu tempat yang mengurus perawatan harian. */
+  require('./routes/face').pangkasFotoLama();
 });

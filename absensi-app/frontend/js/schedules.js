@@ -209,12 +209,10 @@ function openScheduleModal(employees, current) {
   document.getElementById('form-schedule').addEventListener('submit', async (e) => {
     e.preventDefault();
     const fd = new FormData(e.target);
-    const errorEl = document.getElementById('form-error');
 
     const workDays = Array.from(document.querySelectorAll('.sched-day:checked')).map(c => c.value).join(',');
     if (!workDays) {
-      errorEl.textContent = 'Pilih minimal satu hari kerja.';
-      errorEl.classList.remove('hidden');
+      tampilkanGalatForm(e.target, 'Pilih minimal satu hari kerja.');
       return;
     }
 
@@ -222,8 +220,7 @@ function openScheduleModal(employees, current) {
     if (document.querySelector('.sched-scope:checked').value === 'employees') {
       employeeIds = Array.from(document.querySelectorAll('.sched-emp:checked')).map(c => Number(c.value));
       if (employeeIds.length === 0) {
-        errorEl.textContent = 'Pilih minimal satu karyawan.';
-        errorEl.classList.remove('hidden');
+        tampilkanGalatForm(e.target, 'Pilih minimal satu karyawan.');
         return;
       }
     }
@@ -241,8 +238,7 @@ function openScheduleModal(employees, current) {
       closeModal();
       renderSchedulesTab();
     } catch (err) {
-      errorEl.textContent = err.message;
-      errorEl.classList.remove('hidden');
+      tampilkanGalatForm(e.target, err.message, [[/jam masuk/i, 'startTime'], [/jam pulang/i, 'endTime'], [/hari kerja/i, 'workDays'], [/tanggal berlaku/i, 'effectiveFrom']]);
       submitBtn.disabled = false;
     }
   });
@@ -267,7 +263,10 @@ function renderHolidayCard(holidays) {
       </div>
       <ul class="divide-y divide-slate-100">
         ${holidays.length === 0
-          ? `<li class="px-4 py-8 text-center text-sm text-slate-400">Belum ada hari libur untuk ${escapeHtml(SchedulesState.holidayYear)}.</li>`
+          ? `<li>${keadaanKosongHtml({
+              judul: `Belum ada hari libur ${SchedulesState.holidayYear}`,
+              pesan: 'Hari libur membuat tanggal itu tidak dihitung alpa di laporan gaji. Bisa diisi manual, atau dibuatkan otomatis untuk empat libur nasional.'
+            })}</li>`
           : holidays.map(h => `
             <li class="flex items-center justify-between gap-3 px-4 py-2.5">
               <div class="min-w-0">
@@ -365,7 +364,6 @@ function openHolidayModal() {
   document.getElementById('form-holiday').addEventListener('submit', async (e) => {
     e.preventDefault();
     const fd = new FormData(e.target);
-    const errorEl = document.getElementById('form-error');
     const submitBtn = e.target.querySelector('button[type="submit"]');
     submitBtn.disabled = true;
     try {
@@ -374,8 +372,7 @@ function openHolidayModal() {
       closeModal();
       renderSchedulesTab();
     } catch (err) {
-      errorEl.textContent = err.message;
-      errorEl.classList.remove('hidden');
+      tampilkanGalatForm(e.target, err.message, [[/jam masuk/i, 'startTime'], [/jam pulang/i, 'endTime'], [/hari kerja/i, 'workDays'], [/tanggal berlaku/i, 'effectiveFrom']]);
       submitBtn.disabled = false;
     }
   });

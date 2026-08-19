@@ -56,7 +56,12 @@ function renderLookupCard(kind, list) {
       </div>
       <ul class="divide-y divide-slate-100">
         ${list.length === 0
-          ? `<li class="px-4 py-8 text-center text-sm text-slate-400">Belum ada ${config.title.toLowerCase()}.</li>`
+          ? `<li>${keadaanKosongHtml({
+              judul: `Belum ada ${config.title.toLowerCase()}`,
+              pesan: `Daftar ini dipakai saat mengisi data karyawan. Selama kosong, kolom ${config.title.toLowerCase()} di form karyawan tidak bisa dipilih.`,
+              aksiLabel: '+ Tambah',
+              aksiSelector: `.lookup-add[data-kind="${kind}"]`
+            })}</li>`
           : list.map(row => `
             <li class="flex items-center justify-between px-4 py-2.5">
               <span class="text-sm text-slate-700">${escapeHtml(row.name)}</span>
@@ -71,6 +76,7 @@ function renderLookupCard(kind, list) {
   `;
 
   card.querySelector('.lookup-add').addEventListener('click', () => openLookupModal(kind, null));
+  pasangAksiKosong(card);
 
   card.querySelectorAll('.lookup-edit').forEach(btn => {
     btn.addEventListener('click', () => openLookupModal(kind, { id: btn.dataset.id, name: btn.dataset.name }));
@@ -117,7 +123,6 @@ function openLookupModal(kind, existing) {
     const record = { name: new FormData(e.target).get('name').trim() };
     if (isEdit) record.id = existing.id;
 
-    const errorEl = document.getElementById('form-error');
     const submitBtn = e.target.querySelector('button[type="submit"]');
     submitBtn.disabled = true;
     try {
@@ -125,8 +130,7 @@ function openLookupModal(kind, existing) {
       closeModal();
       renderLookupsTab();
     } catch (err) {
-      errorEl.textContent = err.message;
-      errorEl.classList.remove('hidden');
+      tampilkanGalatForm(e.target, err.message, [[/sudah ada|wajib diisi/i, 'name']]);
       submitBtn.disabled = false;
     }
   });

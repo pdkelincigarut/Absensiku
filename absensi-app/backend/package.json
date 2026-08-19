@@ -10,7 +10,8 @@
     "seed:demo": "node seedDemo.js",
     "set-password": "node setPassword.js",
     "test": "node --test \"test/*.test.js\"",
-    "backup": "node backup.js"
+    "backup": "node backup.js",
+    "periksa-db": "node periksaDatabase.js"
   },
   "engines": {
     "node": ">=22.5.0"

@@ -85,7 +85,7 @@ function auditValueDisplay(key, value) {
   if (['active', 'is_estimate', 'is_seeded'].includes(key)) return value ? 'Ya' : 'Tidak';
   if (key === 'deleted_at') return formatWaktuLog(Number(value));
   if (['daily_wage', 'deduction_flat_amount', 'deduction_per_minute_amount'].includes(key)) {
-    return 'Rp' + Number(value).toLocaleString('id-ID');
+    return formatRupiah(value);
   }
   if (['date', 'birth_date', 'join_date', 'effective_from'].includes(key)) {
     // effective_from bawaan migrasi memakai 1970-01-01 sebagai penanda
@@ -333,7 +333,10 @@ async function loadAuditList() {
   }
 
   if (entries.length === 0) {
-    listEl.innerHTML = `<p class="text-sm text-slate-400 text-center py-8">Belum ada perubahan yang tercatat untuk filter ini.</p>`;
+    listEl.innerHTML = keadaanKosongHtml({
+      judul: 'Belum ada perubahan tercatat',
+      pesan: 'Tidak ada perubahan data yang cocok dengan filter ini. Coba longgarkan rentang tanggalnya, atau pilih jenis data yang lain.'
+    });
     return;
   }
 

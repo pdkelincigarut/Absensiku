@@ -37,7 +37,98 @@ function isBirthdayToday(birthDateStr) {
   return m === now.getMonth() + 1 && d === now.getDate();
 }
 
+/* ---------------- Format uang ----------------
+
+   Semua nominal rupiah di aplikasi ini lewat sini, baik yang ditampilkan
+   maupun yang sedang diketik, supaya tidak ada satu tempat pun yang
+   menampilkan angka gundul tanpa pemisah ribuan. */
+
+/* 1500000 -> "1.500.000". Memakai locale id-ID, bukan menyisipkan titik
+   sendiri tiap tiga angka: cara manual selalu salah untuk angka negatif dan
+   pecahan, dan di sini nilainya dibulatkan lebih dulu supaya tidak pernah
+   muncul koma di kolom upah. */
+function formatRibuan(n) {
+  const angka = Math.round(Number(n) || 0);
+  return angka.toLocaleString('id-ID');
+}
+
+function formatRupiah(n) {
+  return 'Rp' + formatRibuan(n);
+}
+
+/* "Rp1.500.000" / "1.500.000" / "1500000" -> 1500000.
+   Membuang SEMUA yang bukan angka, jadi titik pemisah, "Rp", dan spasi
+   sama-sama hilang. Kotak kosong menghasilkan null, bukan 0 -- keduanya
+   berbeda arti: "belum diisi" tidak sama dengan "nol rupiah". */
+function parseRupiah(teks) {
+  const angkaSaja = String(teks == null ? '' : teks).replace(/\D/g, '');
+  if (angkaSaja === '') return null;
+  return Number(angkaSaja);
+}
+
+/* Menyulap sebuah <input type="text"> jadi kotak nominal rupiah yang
+   memberi titik pemisah sambil diketik.
+
+   Kenapa bukan <input type="number"> saja: kotak angka bawaan browser
+   menolak nilai yang mengandung titik pemisah -- begitu diisi "1.500.000"
+   nilainya dianggap tidak sah dan .value berubah jadi string kosong. Jadi
+   pemisah ribuan dan type="number" memang tidak bisa berjalan bersamaan.
+
+   Kursor dipulihkan berdasarkan JUMLAH ANGKA di sebelah kirinya, bukan
+   posisi karakter: penambahan satu titik menggeser semua karakter di
+   kanannya, sehingga mengembalikan kursor ke posisi karakter yang sama akan
+   membuatnya melompat mundur satu huruf setiap kali melewati kelipatan
+   ribuan. */
+function pasangInputRupiah(input, onChange) {
+  const tulisUlang = () => {
+    const posisi = input.selectionStart;
+    const angkaSebelumKursor = input.value.slice(0, posisi).replace(/\D/g, '').length;
+
+    const nilai = parseRupiah(input.value);
+    input.value = nilai === null ? '' : formatRibuan(nilai);
+
+    /* Cari letak karakter tepat setelah angka ke-N pada teks yang baru. */
+    let posisiBaru = input.value.length;
+    let terhitung = 0;
+    for (let i = 0; i < input.value.length; i++) {
+      if (/\d/.test(input.value[i])) terhitung++;
+      if (terhitung === angkaSebelumKursor) { posisiBaru = i + 1; break; }
+    }
+    if (angkaSebelumKursor === 0) posisiBaru = 0;
+    input.setSelectionRange(posisiBaru, posisiBaru);
+  };
+
+  input.addEventListener('input', () => {
+    tulisUlang();
+    if (onChange) onChange(parseRupiah(input.value));
+  });
+
+  // Nilai awal dari server ikut dirapikan, bukan hanya yang diketik.
+  if (input.value !== '') input.value = formatRibuan(parseRupiah(input.value));
+}
+
 /* ---------------- HTTP helper (dipakai Storage & Auth) ---------------- */
+
+/* Dipanggil sekali saja walau banyak permintaan gagal berbarengan. Satu
+   halaman bisa menembak lima endpoint sekaligus; tanpa penjaga ini halaman
+   login digambar ulang lima kali dan pesannya berkedip. */
+let sedangKembaliKeLogin = false;
+
+function kembaliKeLoginKarenaSesiHabis() {
+  if (sedangKembaliKeLogin) return;
+  sedangKembaliKeLogin = true;
+
+  /* Timer panel yang sedang berjalan harus dihentikan dulu. Kalau tidak,
+     polling monitoring tetap menembak endpoint yang sudah pasti 401 dan
+     memicu ini lagi dari belakang halaman login. */
+  if (typeof stopHeaderClock === 'function') stopHeaderClock();
+  if (typeof OwnerState !== 'undefined' && OwnerState.monitorTimer) clearInterval(OwnerState.monitorTimer);
+  if (typeof HrState !== 'undefined' && HrState.monitorTimer) clearInterval(HrState.monitorTimer);
+  if (typeof KioskState !== 'undefined' && KioskState.timer) hentikanKiosk();
+
+  renderLogin('Sesi Anda sudah berakhir. Silakan masuk lagi.');
+  sedangKembaliKeLogin = false;
+}
 
 async function apiRequest(method, url, body) {
   const opts = { method, headers: {} };
@@ -49,6 +140,18 @@ async function apiRequest(method, url, body) {
   let data = null;
   try { data = await res.json(); } catch (e) { /* respons tanpa body, biarkan null */ }
   if (!res.ok) {
+    /* Sesi habis (cookie berumur 12 jam) ditangani di sini, satu tempat untuk
+       semua panel. Sebelumnya tiap panel menampilkan "Gagal memuat data:
+       Belum login." di tengah layar merah, tanpa tombol apa pun -- dan itu
+       yang dilihat HR tiap pagi setelah aplikasi ditinggal semalam. Layar
+       buntu, bukan pesan.
+
+       Pengecualian /api/login: 401 di sana berarti password salah, dan
+       melempar orang kembali ke halaman login yang sedang dia isi akan
+       menghapus ketikannya sendiri. */
+    if (res.status === 401 && !url.endsWith('/api/login')) {
+      kembaliKeLoginKarenaSesiHabis();
+    }
     const err = new Error((data && (data.message || data.error)) || `Request gagal (${res.status})`);
     err.status = res.status;
     err.data = data;
@@ -169,6 +272,43 @@ const Storage = {
     }
     const query = params.toString();
     return apiRequest('GET', `/api/audit-log${query ? `?${query}` : ''}`);
+  },
+
+  /* Kios absen mandiri. Tidak ada sesi di balik ini -- server sengaja
+     membuka route-nya tanpa login, dan membatasi sendiri apa yang boleh
+     dilakukan dari sana. */
+  async getKioskEmployees() {
+    return apiRequest('GET', '/api/kiosk/employees');
+  },
+  async kioskCheckIn(employeeId) {
+    return apiRequest('POST', `/api/kiosk/check-in/${employeeId}`);
+  },
+  async kioskCheckOut(employeeId) {
+    return apiRequest('POST', `/api/kiosk/check-out/${employeeId}`);
+  },
+  /* Yang dikirim cuma satu descriptor hasil kamera. Server yang menentukan
+     itu wajah siapa, dan server juga yang memutuskan ini absen masuk atau
+     jam pulang -- halaman kios tidak pernah memegang data wajah siapa pun. */
+  async kioskFaceCheckIn(descriptor, photo) {
+    return apiRequest('POST', '/api/kiosk/face/check-in', { descriptor, photo });
+  },
+
+  async getFaceEnrollments() {
+    return apiRequest('GET', '/api/face/enrollments');
+  },
+  async saveFaceEnrollment(employeeId, descriptors) {
+    return apiRequest('POST', `/api/face/enroll/${employeeId}`, { descriptors });
+  },
+  async deleteFaceEnrollment(employeeId) {
+    return apiRequest('DELETE', `/api/face/enroll/${employeeId}`);
+  },
+  async getFacePhotos(filter) {
+    const params = new URLSearchParams();
+    for (const key of ['date', 'employeeId']) {
+      if (filter && filter[key]) params.set(key, filter[key]);
+    }
+    const query = params.toString();
+    return apiRequest('GET', `/api/face/photos${query ? `?${query}` : ''}`);
   },
 
   async recordCheckOut(employeeId, date) {

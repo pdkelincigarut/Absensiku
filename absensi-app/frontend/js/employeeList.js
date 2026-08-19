@@ -98,7 +98,7 @@ function renderEmployeeListTab(employees) {
           <p class="text-xs text-slate-400 mt-0.5">Menampilkan ${sorted.length} dari ${employees.length} karyawan</p>
         </div>
         <div class="flex flex-col sm:flex-row gap-2 lg:ml-auto">
-          <input id="emp-search" type="search" value="${escapeHtml(EmployeeListState.search)}" placeholder="Cari nama, kode, jabatan..." class="border border-slate-300 rounded-lg px-3 py-2 text-sm w-full sm:w-64 focus:outline-none focus:ring-2 focus:ring-klc-500" />
+          <input id="emp-search" type="search" value="${escapeHtml(EmployeeListState.search)}" placeholder="Cari nama, kode, jabatan..." class="border border-slate-300 rounded-lg px-3 py-2 text-sm w-full sm:w-64" />
           <button id="btn-emp-download" class="px-4 py-2 rounded-lg border border-slate-300 text-slate-600 text-sm font-medium hover:bg-slate-50 whitespace-nowrap">Download</button>
           <button id="btn-add-emp" class="px-4 py-2 rounded-lg bg-klc-600 text-white text-sm font-medium hover:bg-klc-700 whitespace-nowrap">+ Tambah Karyawan</button>
         </div>
@@ -141,10 +141,20 @@ function renderEmployeeListTab(employees) {
 
   const tbody = document.getElementById('emp-tbody');
   if (pageRows.length === 0) {
-    const message = EmployeeListState.search.trim()
-      ? `Tidak ada karyawan yang cocok dengan "${escapeHtml(EmployeeListState.search.trim())}".`
-      : 'Belum ada karyawan.';
-    tbody.innerHTML = `<tr><td colspan="7" class="px-4 py-8 text-center text-slate-400">${message}</td></tr>`;
+    const mencari = EmployeeListState.search.trim();
+    const isi = mencari
+      ? keadaanKosongHtml({
+          judul: 'Tidak ada yang cocok',
+          pesan: `Tidak ada karyawan yang namanya, kodenya, atau jabatannya mengandung "${mencari}". Coba kata kunci yang lebih pendek.`
+        })
+      : keadaanKosongHtml({
+          judul: 'Belum ada karyawan',
+          pesan: 'Daftar ini terisi setelah karyawan pertama ditambahkan. Absensi dan laporan gaji ikut memakai daftar yang sama.',
+          aksiLabel: '+ Tambah Karyawan',
+          aksiSelector: '#btn-add-emp'
+        });
+    tbody.innerHTML = `<tr><td colspan="7">${isi}</td></tr>`;
+    pasangAksiKosong(tbody);
   } else {
     tbody.innerHTML = pageRows.map(emp => {
       const birthday = isBirthdayToday(emp.birthDate);
@@ -154,7 +164,7 @@ function renderEmployeeListTab(employees) {
             <div class="flex items-center gap-3">
               ${employeeAvatarHtml(emp)}
               <div class="min-w-0">
-                <p class="text-slate-700 truncate">${escapeHtml(emp.name)}${birthday ? ' 🎂' : ''}</p>
+                <p class="text-slate-700 truncate">${escapeHtml(emp.name)}${birthday ? ' ' + IKON_KUE_ULTAH : ''}</p>
                 <p class="text-xs text-slate-400 font-mono">${escapeHtml(emp.employeeCode || '—')}</p>
               </div>
             </div>

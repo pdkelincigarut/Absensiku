@@ -238,3 +238,27 @@ test('GET daftar karyawan ikut membawa tanggal masuk dan catatan', async () => {
   assert.equal(target.joinDate, '2026-03-01');
   assert.equal(target.notes, 'Masa percobaan sampai Juni.');
 });
+
+/* Kotak upah di form kini bertipe teks (supaya bisa menampilkan pemisah
+   ribuan), sehingga kiriman kosong jauh lebih mungkin sampai ke sini
+   daripada saat kotaknya masih type="number". Number(null) dan Number('')
+   sama-sama 0 dan lolos pemeriksaan finite, jadi tanpa penjagaan khusus
+   karyawan bisa tersimpan dengan upah Rp0 tanpa ada yang menyadari. */
+test('upah harian kosong ditolak, bukan disimpan jadi nol', async () => {
+  for (const upah of [null, '', undefined]) {
+    const res = await createEmployee({ name: 'Upah Kosong', dailyWage: upah, employeeCode: 'UK-1' });
+    assert.equal(res.status, 400, `dailyWage=${JSON.stringify(upah)} seharusnya ditolak`);
+    assert.match((await res.json()).error, /upah harian wajib diisi/i);
+  }
+});
+
+test('upah harian negatif ditolak', async () => {
+  const res = await createEmployee({ name: 'Upah Minus', dailyWage: -5000, employeeCode: 'UK-2' });
+  assert.equal(res.status, 400);
+  assert.match((await res.json()).error, /negatif/i);
+});
+
+test('upah harian nol masih boleh kalau memang disengaja', async () => {
+  const res = await createEmployee({ name: 'Magang Tanpa Upah', dailyWage: 0, employeeCode: 'UK-3' });
+  assert.equal(res.status, 201);
+});

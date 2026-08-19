@@ -65,7 +65,10 @@ async function renderLatePolicyTab() {
 
   const tbody = document.getElementById('lp-tbody');
   if (list.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="6" class="px-4 py-8 text-center text-slate-400">Belum ada karyawan.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="7">${keadaanKosongHtml({
+      judul: 'Belum ada karyawan',
+      pesan: 'Aturan keterlambatan dipasang per karyawan, jadi daftar ini baru terisi setelah ada karyawan di tab Data Karyawan.'
+    })}</td></tr>`;
   } else {
     // Satu karyawan bisa punya beberapa versi aturan; tiap versi jadi satu baris,
     // nama hanya ditulis di baris pertama supaya kelompoknya terbaca.
@@ -199,13 +202,19 @@ function openLatePolicyModal(list) {
           </div>
         </div>
         <div id="wrap-flat" class="lp-amount">
-          <label class="text-sm text-slate-500 block mb-1">Nominal potongan (Rp)</label>
-          <input type="number" min="0" step="1000" name="deductionFlatAmount" value="${p && p.deductionFlatAmount != null ? p.deductionFlatAmount : 50000}" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+          <label class="text-sm text-slate-500 block mb-1">Nominal potongan</label>
+          <div class="relative">
+            <span class="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-400 pointer-events-none">Rp</span>
+            <input type="text" inputmode="numeric" autocomplete="off" name="deductionFlatAmount" value="${p && p.deductionFlatAmount != null ? p.deductionFlatAmount : 50000}" class="w-full border border-slate-300 rounded-lg pl-9 pr-3 py-2 text-sm" />
+          </div>
           <p class="text-xs text-slate-400 mt-1">Dipotong sekali, berapa pun kelebihan menitnya.</p>
         </div>
         <div id="wrap-per_minute" class="lp-amount">
-          <label class="text-sm text-slate-500 block mb-1">Potongan per menit kelebihan (Rp)</label>
-          <input type="number" min="0" step="500" name="deductionPerMinuteAmount" value="${p && p.deductionPerMinuteAmount != null ? p.deductionPerMinuteAmount : 1000}" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+          <label class="text-sm text-slate-500 block mb-1">Potongan per menit kelebihan</label>
+          <div class="relative">
+            <span class="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-400 pointer-events-none">Rp</span>
+            <input type="text" inputmode="numeric" autocomplete="off" name="deductionPerMinuteAmount" value="${p && p.deductionPerMinuteAmount != null ? p.deductionPerMinuteAmount : 1000}" class="w-full border border-slate-300 rounded-lg pl-9 pr-3 py-2 text-sm" />
+          </div>
           <p class="text-xs text-slate-400 mt-1">Dikalikan hanya ke menit di atas toleransi.</p>
         </div>
         <div id="wrap-percentage" class="lp-amount">
@@ -234,6 +243,9 @@ function openLatePolicyModal(list) {
   document.querySelectorAll('.lp-type').forEach(r => r.addEventListener('change', syncAmountFields));
   syncAmountFields();
 
+  ['deductionFlatAmount', 'deductionPerMinuteAmount'].forEach(nama =>
+    pasangInputRupiah(document.querySelector(`#form-lp [name="${nama}"]`)));
+
   document.getElementById('btn-cancel-lp').addEventListener('click', closeModal);
 
   document.getElementById('form-lp').addEventListener('submit', async (e) => {
@@ -246,11 +258,11 @@ function openLatePolicyModal(list) {
       effectiveFrom: fd.get('effectiveFrom'),
       deductionType: fd.get('deductionType')
     };
-    if (payload.deductionType === 'flat') payload.deductionFlatAmount = Number(fd.get('deductionFlatAmount'));
-    else if (payload.deductionType === 'per_minute') payload.deductionPerMinuteAmount = Number(fd.get('deductionPerMinuteAmount'));
+    // parseRupiah, bukan Number: isinya kini teks berpemisah titik.
+    if (payload.deductionType === 'flat') payload.deductionFlatAmount = parseRupiah(fd.get('deductionFlatAmount'));
+    else if (payload.deductionType === 'per_minute') payload.deductionPerMinuteAmount = parseRupiah(fd.get('deductionPerMinuteAmount'));
     else payload.deductionPercentage = Number(fd.get('deductionPercentage'));
 
-    const errorEl = document.getElementById('form-error');
     const submitBtn = e.target.querySelector('button[type="submit"]');
     submitBtn.disabled = true;
     try {
@@ -258,8 +270,7 @@ function openLatePolicyModal(list) {
       closeModal();
       renderLatePolicyTab();
     } catch (err) {
-      errorEl.textContent = err.message;
-      errorEl.classList.remove('hidden');
+      tampilkanGalatForm(e.target, err.message, [[/toleransi keterlambatan/i, 'graceMinutes'], [/ambang menit/i, 'thresholdMinutes'], [/persentase potongan/i, 'deductionPercentage'], [/nominal potongan/i, 'deductionFlatAmount'], [/per menit/i, 'deductionPerMinuteAmount'], [/tanggal berlaku/i, 'effectiveFrom']]);
       submitBtn.disabled = false;
     }
   });

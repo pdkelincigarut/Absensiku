@@ -67,6 +67,118 @@ npm run seed
 
 > ⛔ **Jangan pernah menjalankan `npm run seed:demo` di server ini.** Perintah itu **menghapus seluruh isi database**, termasuk semua riwayat absensi, lalu menggantinya dengan data contoh untuk presentasi. Itu hanya untuk komputer pengembangan.
 
+## 4b. Memindahkan data dari server lama (iMac)
+
+Kalau iMac sempat dipakai sebagai server dan datanya sudah terisi, data itu
+bisa dilanjutkan di PC Windows ini. Yang dipindahkan hanya **satu berkas
+database**; foto karyawan ikut di dalamnya karena disimpan sebagai BLOB.
+
+> **Jangan menyalin `absensiku.db` mentah-mentah selagi server iMac hidup.**
+> Database berjalan dalam mode WAL, artinya perubahan terbaru masih menunggu
+> di berkas pendamping `absensiku.db-wal`. Menyalin `.db` saja bisa
+> menghasilkan berkas yang tertinggal beberapa transaksi, atau rusak di
+> tengah transaksi — dan kerusakan semacam itu sering baru terasa
+> berminggu-minggu kemudian saat baris tertentu kebetulan dibaca.
+
+### Langkah 1 — Buat salinan konsisten di iMac
+
+Di Terminal iMac, masuk ke folder `absensi-app/backend`, lalu:
+
+```bash
+npm run backup
+```
+
+Perintah ini memakai `VACUUM INTO`, yang membuat satu berkas utuh dan
+konsisten walau server sedang jalan. Hasilnya ada di folder backup dengan
+nama seperti `absensiku-2026-08-19.db`.
+
+Kalau server iMac sudah dimatikan permanen, salin saja berkas backup terakhir
+dari folder itu.
+
+### Langkah 2 — Pindahkan berkasnya
+
+Lewat flashdisk, jaringan, atau cara apa pun. Yang dipindah cukup satu berkas
+`.db` tadi. Berkas `-wal` dan `-shm` **tidak perlu** ikut — isinya sudah
+tergabung ke dalam hasil `VACUUM INTO`.
+
+### Langkah 3 — Periksa dulu sebelum dipakai
+
+Di PC Windows, dari folder `absensi-app\backend`:
+
+```bash
+npm run periksa-db -- "D:\salinan\absensiku-2026-08-19.db"
+```
+
+Perintah ini tidak mengubah apa pun, hanya memeriksa dan melapor:
+
+- **keutuhan berkas** (`integrity_check`) — menangkap salinan yang terpotong
+- **versi struktur data** — menolak database yang berasal dari aplikasi
+  **lebih baru** daripada kode di PC ini. Kode lama tidak tahu cara membaca
+  kolom yang belum dikenalnya, dan tidak ada jalan mundur. Kalau ini yang
+  muncul, jalankan `git pull` dulu.
+- **isi pokoknya** — berkas sah tapi kosong biasanya berarti salah ambil
+  berkas.
+
+Lanjutkan hanya kalau baris terakhirnya berbunyi `HASIL: Berkas sehat dan cocok`.
+
+### Langkah 4 — Pasang
+
+Hentikan dulu server Windows kalau sedang jalan, lalu:
+
+```bash
+copy "D:\salinan\absensiku-2026-08-19.db" "data\absensiku.db"
+```
+
+Kalau `data\absensiku.db` sudah ada isinya dan masih ingin disimpan,
+ganti namanya dulu — jangan ditimpa begitu saja.
+
+### Langkah 5 — Jalankan
+
+```bash
+npm start
+```
+
+Saat pertama dijalankan, migrasi yang belum ada di database lama akan dipasang
+sendiri, dan tercetak di layar seperti:
+
+```
+Migration diterapkan: 012_face_recognition.sql
+```
+
+Ini normal. Database dari iMac dibuat sebelum fitur pengenalan wajah ada, jadi
+tabel wajahnya baru dibuat sekarang dalam keadaan kosong. **Data lama tidak
+ada yang berubah** — migrasi hanya menambah tabel dan kolom, tidak pernah
+mengubah atau menghapus isi yang sudah ada.
+
+### Langkah 6 — Ganti password, lalu periksa
+
+```bash
+npm run set-password
+```
+
+Wajib. Selain mengganti password, perintah ini menghapus semua sesi login
+bawaan dari komputer lama.
+
+Terakhir, buka aplikasinya dan cocokkan tiga hal dengan iMac:
+
+1. **Jumlah karyawan** di tab Data Karyawan
+2. **Laporan Gaji** periode berjalan — total gaji bersihnya harus sama persis
+3. **Jam dan zona waktu PC ini** (lihat bagian 1) — jam server menentukan
+   keterlambatan, dan keterlambatan menentukan potongan gaji
+
+Kalau ketiganya cocok, pemindahan berhasil.
+
+### Yang tidak ikut pindah
+
+- **Pendaftaran wajah** — belum ada di database iMac, jadi semua karyawan
+  mulai dari keadaan "belum terdaftar". Daftarkan ulang lewat tab Wajah.
+- **Foto bukti absen** — sama, mulai dari kosong.
+- **Sesi login** — sengaja dibuang di Langkah 6.
+
+Semua data lain ikut: karyawan beserta fotonya, seluruh riwayat absensi,
+jabatan, divisi, hari libur, aturan keterlambatan, jadwal kerja, dan log
+perubahan.
+
 ## 5. Ganti password kedua akun — WAJIB
 
 Password `hr123` dan `owner123` tertulis di repositori publik. Selama belum diganti, **siapa pun di jaringan kantor yang membuka repositori itu bisa masuk sebagai Owner dan melihat seluruh data gaji.**
@@ -186,7 +298,66 @@ Berlaku sama untuk berapa pun jumlah client. Sarankan simpan sebagai bookmark su
 
 **Aplikasi tidak butuh internet.** Tailwind dan seluruh berkas font disajikan dari dalam aplikasi sendiri, jadi tampilannya tetap utuh walau internet kantor sedang mati. Yang dibutuhkan hanya jaringan lokal antara client dan PC server.
 
-## 13. Update aplikasi di kemudian hari
+## 13. Panel Check In & pengenalan wajah
+
+### Kamera HANYA jalan di PC server ini
+
+Browser cuma mengizinkan kamera pada alamat `localhost` atau alamat HTTPS.
+Lewat `http://192.168.x.x:3000` objek kameranya bahkan tidak disediakan
+browser — ini bukan soal izin yang bisa diklik, melainkan aturan browser.
+
+Artinya:
+
+- **PC kios harus PC server ini juga.** Buka `http://localhost:3000` di PC ini,
+  pilih tab **Check In**. Ini cara yang disarankan.
+- Komputer client (iMac, PC lain) tetap bisa membuka aplikasi lewat alamat IP
+  untuk panel HR dan Owner. Yang tidak bisa dari sana cuma kameranya.
+
+Cek cepat — buka Console browser (F12) di halaman aplikasi, ketik:
+
+```js
+window.isSecureContext
+```
+
+`true` berarti kamera bisa dipakai, `false` berarti tidak.
+
+### Urutan penerapan
+
+1. Login sebagai **Owner**, buka tab **Wajah**.
+2. Daftarkan wajah karyawan satu per satu. Tiap orang diambil 5 kali dengan
+   posisi kepala sedikit berbeda. Perlu sekitar satu menit per orang.
+3. Begitu wajah seseorang terdaftar, **tombol manual untuk orang itu langsung
+   mati** — dia hanya bisa absen lewat kamera. Yang belum terdaftar masih
+   memakai tombol, jadi pendaftarannya boleh dicicil.
+4. Taruh webcam setinggi wajah orang berdiri, jangan membelakangi jendela.
+   Pencahayaan yang berubah-ubah adalah penyebab nomor satu wajah tidak
+   dikenali.
+
+### Kalau ada yang tidak dikenali
+
+Bukan masalah selama jarang. Karyawan bisa mencoba lagi; kalau tetap gagal,
+HR mencatatkan absennya dari panel HR (tercatat di Log Perubahan dengan
+alasan). Kalau seseorang sering gagal — potong rambut, kacamata baru,
+berjenggot — daftarkan ulang wajahnya lewat tab Wajah.
+
+### Foto bukti
+
+Setiap absen lewat kamera menyimpan satu foto. Lihat di tab **Wajah** bagian
+bawah, pilih tanggalnya. Foto disimpan 40 hari lalu terhapus sendiri — begitu lewat, tanggal paling awal terhapus dengan sendirinya.
+
+Foto inilah pengaman yang sebenarnya, bukan ketelitian pengenalannya: sistem
+pengenal wajah mana pun bisa dikelabui foto di layar ponsel. Yang menahan
+orang menitipkan absen adalah tahu bahwa setiap ceklis meninggalkan foto yang
+bisa dibuka Owner.
+
+### Persetujuan karyawan
+
+Data wajah termasuk data pribadi spesifik menurut UU PDP No. 27/2022.
+Siapkan persetujuan tertulis dari tiap karyawan sebelum mendaftarkan
+wajahnya. Yang disimpan aplikasi bukan foto wajah melainkan 128 angka ciri
+yang tidak bisa dikembalikan menjadi gambar, tapi persetujuannya tetap perlu.
+
+## 14. Update aplikasi di kemudian hari
 
 Kalau ada perbaikan/fitur baru yang sudah di-push ke GitHub:
 ```cmd
@@ -199,7 +370,7 @@ lalu restart server: buka **Task Scheduler**, klik kanan `AbsensiKu Server` → 
 
 Migrasi database berjalan otomatis saat server hidup — tidak ada langkah tambahan.
 
-## 14. Backup data
+## 15. Backup data
 
 Satu-satunya sumber data ada di:
 ```

@@ -17,9 +17,8 @@ const OwnerState = {
   account: null
 };
 
-function formatRupiah(n) {
-  return 'Rp' + Math.round(n || 0).toLocaleString('id-ID');
-}
+/* formatRupiah pindah ke storage.js, berkumpul dengan fungsi format lainnya
+   dan dipakai bersama kotak isian nominal. */
 
 /* Jumlah hari kerja sebulan yang dipakai form karyawan untuk menghubungkan
    Upah Harian dengan Upah Bulanan. Ditetapkan owner: 26, mengikuti jadwal
@@ -101,6 +100,7 @@ async function renderOwnerDashboard(account) {
           ${tabButton('jadwal', 'Jadwal &amp; Libur')}
           ${tabButton('riwayat', 'Riwayat Absensi')}
           ${tabButton('laporan', 'Laporan Gaji')}
+          ${tabButton('wajah', 'Wajah')}
           ${tabButton('log', 'Log Perubahan')}
         </nav>
       </header>
@@ -159,6 +159,7 @@ async function renderOwnerTab() {
   else if (OwnerState.tab === 'jadwal') renderSchedulesTab();
   else if (OwnerState.tab === 'riwayat') renderRiwayatTab(employees.filter(e => e.active));
   else if (OwnerState.tab === 'laporan') renderLaporanTab();
+  else if (OwnerState.tab === 'wajah') renderFaceTab();
   else if (OwnerState.tab === 'log') renderAuditTab();
 }
 
@@ -286,12 +287,23 @@ async function openEmployeeModal(employeeId) {
              cara lain mengisinya, jadi keduanya tidak mungkin berbeda isi. -->
         <div class="grid grid-cols-2 gap-3">
           <div>
-            <label class="text-sm text-slate-500 block mb-1">Upah Harian (Rp)</label>
-            <input required type="number" min="0" step="1000" name="dailyWage" value="${emp ? emp.dailyWage : ''}" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+            <label class="text-sm text-slate-500 block mb-1">Upah Harian</label>
+            <!-- type="text", bukan "number": kotak angka bawaan browser
+                 menganggap "150.000" nilai tidak sah dan mengosongkan
+                 .value-nya, sehingga pemisah ribuan mustahil ditampilkan
+                 sambil diketik. inputmode="numeric" tetap memunculkan papan
+                 tombol angka di layar sentuh. -->
+            <div class="relative">
+              <span class="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-400 pointer-events-none">Rp</span>
+              <input required type="text" inputmode="numeric" autocomplete="off" name="dailyWage" value="${emp ? emp.dailyWage : ''}" class="w-full border border-slate-300 rounded-lg pl-9 pr-3 py-2 text-sm" />
+            </div>
           </div>
           <div>
-            <label class="text-sm text-slate-500 block mb-1">Upah Bulanan (Rp)</label>
-            <input type="number" min="0" step="1000" name="monthlyWage" value="${emp && emp.dailyWage ? emp.dailyWage * WORKDAYS_PER_MONTH : ''}" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
+            <label class="text-sm text-slate-500 block mb-1">Upah Bulanan</label>
+            <div class="relative">
+              <span class="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-400 pointer-events-none">Rp</span>
+              <input type="text" inputmode="numeric" autocomplete="off" name="monthlyWage" value="${emp && emp.dailyWage ? emp.dailyWage * WORKDAYS_PER_MONTH : ''}" class="w-full border border-slate-300 rounded-lg pl-9 pr-3 py-2 text-sm" />
+            </div>
           </div>
         </div>
         <p class="text-xs text-slate-400 -mt-1">Terhubung otomatis: ${WORKDAYS_PER_MONTH} hari kerja sebulan. Mengisi salah satu langsung mengisi yang lain.</p>
@@ -336,18 +348,15 @@ async function openEmployeeModal(employeeId) {
   const inputHarian = document.querySelector('#form-emp [name="dailyWage"]');
   const inputBulanan = document.querySelector('#form-emp [name="monthlyWage"]');
 
-  inputHarian.addEventListener('input', () => {
-    const harian = Number(inputHarian.value);
-    inputBulanan.value = inputHarian.value === '' || !Number.isFinite(harian)
-      ? ''
-      : Math.round(harian * WORKDAYS_PER_MONTH);
+  /* Kotak seberang ditulis lewat formatRibuan juga, bukan angka gundul --
+     kalau tidak, kotak yang sedang diketik berpemisah titik sementara
+     pasangannya polos. */
+  pasangInputRupiah(inputHarian, (harian) => {
+    inputBulanan.value = harian === null ? '' : formatRibuan(harian * WORKDAYS_PER_MONTH);
   });
 
-  inputBulanan.addEventListener('input', () => {
-    const bulanan = Number(inputBulanan.value);
-    inputHarian.value = inputBulanan.value === '' || !Number.isFinite(bulanan)
-      ? ''
-      : Math.round(bulanan / WORKDAYS_PER_MONTH);
+  pasangInputRupiah(inputBulanan, (bulanan) => {
+    inputHarian.value = bulanan === null ? '' : formatRibuan(bulanan / WORKDAYS_PER_MONTH);
   });
 
   /* undefined = pengguna tidak menyentuh foto (jangan diubah),
@@ -401,7 +410,8 @@ async function openEmployeeModal(employeeId) {
     const record = isEdit ? { id: emp.id } : {};
     record.employeeCode = fd.get('employeeCode').trim();
     record.name = fd.get('name').trim();
-    record.dailyWage = Number(fd.get('dailyWage'));
+    // Kotaknya kini berisi teks berpemisah titik, jadi harus diurai dulu.
+    record.dailyWage = parseRupiah(fd.get('dailyWage'));
     record.jobId = fd.get('jobId') ? Number(fd.get('jobId')) : null;
     record.organizationId = fd.get('organizationId') ? Number(fd.get('organizationId')) : null;
     if (photoChange !== undefined) record.photo = photoChange;
@@ -410,7 +420,6 @@ async function openEmployeeModal(employeeId) {
     record.notes = (fd.get('notes') || '').trim() || null;
     record.active = fd.get('active') === 'on';
 
-    const errorEl = document.getElementById('form-error');
     const submitBtn = e.target.querySelector('button[type="submit"]');
     submitBtn.disabled = true;
     try {
@@ -418,8 +427,7 @@ async function openEmployeeModal(employeeId) {
       closeModal();
       renderOwnerTab();
     } catch (err) {
-      errorEl.textContent = err.message;
-      errorEl.classList.remove('hidden');
+      tampilkanGalatForm(e.target, err.message, [[/employee id/i, 'employeeCode'], [/upah harian/i, 'dailyWage'], [/nama/i, 'name'], [/tanggal masuk/i, 'joinDate'], [/jabatan/i, 'jobId'], [/divisi/i, 'organizationId']]);
       submitBtn.disabled = false;
     }
   });
@@ -519,7 +527,10 @@ async function renderPayrollTable() {
   }
 
   if (data.rows.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="11" class="px-4 py-8 text-center text-slate-400">Belum ada karyawan aktif.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="11">${keadaanKosongHtml({
+      judul: 'Belum ada karyawan aktif',
+      pesan: 'Laporan gaji hanya memuat karyawan yang berstatus aktif. Karyawan nonaktif tetap tersimpan, tapi tidak ikut dihitung.'
+    })}</td></tr>`;
     return;
   }
 

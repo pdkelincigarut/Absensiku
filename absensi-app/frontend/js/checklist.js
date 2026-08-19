@@ -4,6 +4,12 @@
    jam header berjalan. Tidak ada apa pun soal upah di sini.
    ============================================================ */
 
+/* Ikon kue ulang tahun, jalur dari Heroicons (MIT) -- BUKAN emoji.
+   Emoji digambar font sistem, jadi bentuk dan warnanya berbeda di tiap
+   komputer, tidak bisa mengikuti warna merek, dan dibacakan pembaca layar
+   di tengah kalimat nama orang. */
+const IKON_KUE_ULTAH = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="inline-block w-4 h-4 text-klc-600 align-[-2px]" role="img" aria-label="Ulang tahun hari ini"><path d="M12 6.5V5m0 1.5c-1.4 0-2.8.1-4 .2C6.8 7.8 6 8.8 6 10v2.6m6-6.1c1.4 0 2.8.1 4 .2 1.2.1 2 1.1 2 2.3v2.6M9 6.5V5m6 1.5V5"/><path d="M20 17l-1.5.8a3.4 3.4 0 0 1-3 0 3.4 3.4 0 0 0-3 0 3.4 3.4 0 0 1-3 0 3.4 3.4 0 0 0-3 0 3.4 3.4 0 0 1-3 0L3 17"/><path d="M18 13.2a48 48 0 0 0-6-.4c-2 0-4 .2-6 .4m12 0c.4.1.8.1 1.2.2 1 .2 1.8 1.1 1.8 2.2v5.2c0 .6-.5 1.1-1.1 1.1H4.1c-.6 0-1.1-.5-1.1-1.1v-5.2c0-1.1.8-2 1.8-2.2.4-.1.8-.1 1.2-.2"/></svg>';
+
 const STATUS_LABEL = {
   hadir: 'Hadir',
   izin: 'Izin',
@@ -85,7 +91,7 @@ function renderBirthdayBanner(containerEl, employees) {
   const names = birthdayPeople.map(e => escapeHtml(e.name)).join(', ');
   containerEl.innerHTML = `
     <div class="rounded-xl bg-gradient-to-r from-pink-500 to-amber-400 text-white px-4 py-3 mb-4 flex items-center gap-3 shadow-sm">
-      <span class="text-2xl">🎉</span>
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="w-7 h-7 text-klc-600" role="img" aria-label="Ulang tahun"><path d="M3.5 20.5l4.6-11.7a1 1 0 0 1 1.7-.3l6.7 6.7a1 1 0 0 1-.3 1.7L4.5 21.5a.8.8 0 0 1-1-1z"/><path d="M14 3.5v2M19 5l-1.4 1.4M20.5 10h-2M9 9l6 6"/></svg>
       <p class="text-sm font-medium">Hari ini ulang tahun: <span class="font-bold">${names}</span> — jangan lupa ucapkan selamat!</p>
     </div>
   `;
@@ -147,11 +153,15 @@ async function renderMonitoringList(containerEl, employees, date, accountName) {
   if (!containerEl) return;
 
   if (employees.length === 0) {
-    containerEl.innerHTML = `<p class="text-sm text-slate-400 text-center py-8">Belum ada data karyawan.</p>`;
+    containerEl.innerHTML = keadaanKosongHtml({
+      judul: 'Belum ada karyawan',
+      pesan: 'Ceklis kehadiran baru bisa dipakai setelah ada karyawan terdaftar. Owner bisa menambahkannya di tab Data Karyawan.'
+    });
     return;
   }
 
-  containerEl.innerHTML = `<p class="text-sm text-slate-400 text-center py-8">Memuat...</p>`;
+  containerEl.setAttribute('aria-busy', 'true');
+  containerEl.innerHTML = `<p class="text-sm text-slate-400 text-center py-8" role="status">Memuat...</p>`;
 
   let records;
   try {
@@ -160,6 +170,7 @@ async function renderMonitoringList(containerEl, employees, date, accountName) {
     containerEl.innerHTML = `<p class="text-sm text-rose-500 text-center py-8">Gagal memuat data: ${escapeHtml(err.message)}</p>`;
     return;
   }
+  containerEl.removeAttribute('aria-busy');
   const recordByEmployee = new Map(records.map(r => [String(r.employeeId), r]));
   const unmarked = employees.filter(emp => !recordByEmployee.has(String(emp.id)));
   const sortedEmployees = sortEmployeesForMonitor(employees);
@@ -171,16 +182,21 @@ async function renderMonitoringList(containerEl, employees, date, accountName) {
           <thead class="bg-slate-50 text-slate-500 text-left">
             <tr>
               ${monitorSortableHeader('no', 'No', 'w-16')}
+              <!-- DULU kotak-ceklis, sekarang tombol -- dan itu perbaikan
+                   keselamatan, bukan selera. Kotak-ceklis di kepala tabel
+                   dibaca semua orang sebagai "pilih semua baris", padahal yang
+                   terjadi di sini penulisan absensi belasan orang sekaligus,
+                   dan absensi menentukan gaji. Tombol berlabel apa adanya
+                   tidak bisa disalahartikan. -->
               <th class="px-4 py-2.5 font-medium">
-                <label class="flex items-center gap-2 cursor-pointer select-none">
-                  <input type="checkbox" id="check-all-header" class="accent-klc-600" ${unmarked.length === 0 ? 'disabled' : ''} />
-                  Checklist All
-                </label>
+                <button type="button" id="btn-tandai-semua"
+                        class="text-xs font-semibold text-klc-600 hover:text-klc-700 hover:bg-klc-50 border border-klc-200 rounded-lg px-2.5 py-1.5 transition disabled:text-slate-300 disabled:border-slate-200 disabled:hover:bg-transparent"
+                        ${unmarked.length === 0 ? 'disabled' : ''}>Tandai Semua Hadir</button>
               </th>
               ${monitorSortableHeader('code', 'Employee ID')}
               ${monitorSortableHeader('name', 'Nama Karyawan')}
-              ${monitorSortableHeader('job', 'Job')}
-              ${monitorSortableHeader('organization', 'Organization')}
+              ${monitorSortableHeader('job', 'Jabatan')}
+              ${monitorSortableHeader('organization', 'Divisi')}
               <th class="px-4 py-2.5 font-medium">Absen</th>
               <th class="px-4 py-2.5 font-medium">Keterangan</th>
             </tr>
@@ -188,7 +204,7 @@ async function renderMonitoringList(containerEl, employees, date, accountName) {
           <tbody>
             ${sortedEmployees.map((emp, index) => {
               const rec = recordByEmployee.get(String(emp.id)) || null;
-              const birthdayBadge = isBirthdayToday(emp.birthDate) ? ' <span title="Ulang tahun hari ini">🎂</span>' : '';
+              const birthdayBadge = isBirthdayToday(emp.birthDate) ? ' ' + IKON_KUE_ULTAH : '';
               const statusBadge = rec
                 ? `<span class="text-xs font-medium px-2.5 py-1 rounded-full border ${STATUS_BADGE_CLASS[rec.status]}">${STATUS_LABEL[rec.status]}</span>`
                 : `<span class="text-xs font-medium px-2.5 py-1 rounded-full border bg-slate-100 text-slate-500 border-slate-200">Belum Absen</span>`;
@@ -196,7 +212,13 @@ async function renderMonitoringList(containerEl, employees, date, accountName) {
                 <tr class="border-t border-slate-100">
                   <td class="px-4 py-2.5 text-slate-400">${index + 1}</td>
                   <td class="px-4 py-2.5">
-                    <input type="checkbox" data-emp="${emp.id}" class="row-checkbox accent-klc-600" ${rec ? 'checked' : ''} />
+                    <!-- Kotak ini membuka panel ceklis, jadi ia perlu nama
+                         yang menyebut siapa. Tanpa aria-label, pembaca layar
+                         hanya mengumumkan "kotak centang" tiga belas kali
+                         berturut-turut tanpa satu pun nama. -->
+                    <input type="checkbox" data-emp="${emp.id}" class="row-checkbox accent-klc-600"
+                           aria-label="Ceklis kehadiran ${escapeHtml(emp.name)}"
+                           aria-expanded="${rec ? 'true' : 'false'}" ${rec ? 'checked' : ''} />
                   </td>
                   <td class="px-4 py-2.5 text-slate-500 font-mono text-xs">${escapeHtml(emp.employeeCode || '—')}</td>
                   <td class="px-4 py-2.5 text-slate-700">${escapeHtml(emp.name)}${birthdayBadge}</td>
@@ -244,15 +266,15 @@ async function renderMonitoringList(containerEl, employees, date, accountName) {
     });
   });
 
-  const headerCheckbox = document.getElementById('check-all-header');
-  if (headerCheckbox && unmarked.length > 0) {
-    headerCheckbox.addEventListener('click', async (e) => {
+  const tombolSemua = document.getElementById('btn-tandai-semua');
+  if (tombolSemua && unmarked.length > 0) {
+    tombolSemua.addEventListener('click', async (e) => {
       e.preventDefault();
       if (!confirm(
         `Tandai ${unmarked.length} karyawan yang belum absen sebagai Hadir (Full Day) dengan jam saat ini?\n\n` +
         `Tindakan ini tercatat di Log Perubahan atas nama ${accountName}.`
       )) return;
-      headerCheckbox.disabled = true;
+      tombolSemua.disabled = true;
       try {
         // Satu permintaan untuk seluruh rombongan, bukan N permintaan terpisah:
         // server jadi tahu ini benar-benar satu tindakan massal dan bisa
@@ -397,8 +419,7 @@ function renderAttendancePanel(containerEl, emp, rec, date, accountName, onSaved
     e.preventDefault();
     const fd = new FormData(form);
     const status = fd.get('status');
-    const errorEl = form.querySelector('.form-error');
-    errorEl.classList.add('hidden');
+    bersihkanGalatForm(form);
 
     let attendanceType = null, hoursWorked = null;
     if (status === 'hadir') {
@@ -408,8 +429,7 @@ function renderAttendancePanel(containerEl, emp, rec, date, accountName, onSaved
       else {
         hoursWorked = Number(fd.get('customHours'));
         if (!hoursWorked || hoursWorked <= 0) {
-          errorEl.textContent = 'Jumlah jam kerja harus lebih dari 0.';
-          errorEl.classList.remove('hidden');
+          tampilkanGalatForm(form, 'Jumlah jam kerja harus lebih dari 0.', [[/jam/i, 'customHours']]);
           return;
         }
       }
@@ -429,8 +449,7 @@ function renderAttendancePanel(containerEl, emp, rec, date, accountName, onSaved
       });
       if (onSaved) onSaved();
     } catch (err) {
-      errorEl.textContent = err.message;
-      errorEl.classList.remove('hidden');
+      tampilkanGalatForm(e.target, err.message, [[/alasan/i, 'reason'], [/jam kerja/i, 'customHours'], [/catatan/i, 'note']]);
       submitBtn.disabled = false;
     }
   });
@@ -570,8 +589,8 @@ async function renderHistoryRows(state) {
 
   if (terpilih.length === 0) {
     const pesan = state.status === 'all'
-      ? 'Tidak ada data pada periode ini.'
-      : 'Tidak ada data dengan status itu pada periode ini.';
+      ? 'Belum ada absensi yang tercatat pada bulan ini. Coba pilih bulan lain.'
+      : 'Tidak ada yang berstatus itu pada bulan ini. Coba ganti filter status atau pilih bulan lain.';
     tbody.innerHTML = `<tr><td colspan="7" class="px-4 py-8 text-center text-slate-400">${pesan}</td></tr>`;
     return;
   }

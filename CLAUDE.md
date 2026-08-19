@@ -39,6 +39,8 @@ Bagian ini memisahkan **yang sudah jalan di kode** dari **yang masih rencana**. 
 | Tanggal masuk & catatan | `employees.join_date` / `notes`; hari sebelum tanggal masuk tidak dihitung alpa di laporan gaji |
 | Export CSV | Laporan gaji (`owner.js`) dan daftar karyawan (`employeeList.js`), dibuat di browser pakai Blob + BOM UTF-8 supaya rapi dibuka Excel |
 | Backup harian | Otomatis dari server, satu salinan per hari, disimpan 30 terakhir. Dibuat dengan VACUUM INTO karena database mode WAL |
+| Panel Check In (kios) | Absen mandiri tanpa login di PC umum, `routes/kiosk.js` + `frontend/js/kiosk.js`. Menutup celah "HR tidak masuk = semua terlambat" |
+| Pengenalan wajah | Absen kios lewat kamera. Model face-api dibundel lokal di `frontend/vendor/face-api/`, pencocokan dikerjakan di server. Tiap absen menyimpan foto bukti |
 | Data demo | `seedDemo.js` — riwayat sebulan lebih untuk presentasi, terpisah dari `seed.js` |
 
 ### Belum Dikerjakan (Roadmap)
@@ -54,7 +56,9 @@ Bagian ini memisahkan **yang sudah jalan di kode** dari **yang masih rencana**. 
 
 ### Dibatalkan
 
-**Anti-fraud check-in** (login karyawan, kiosk, selfie, geolocation, device binding) — dibatalkan 2026-08-01, bukan ditunda. Karyawan tidak absen sendiri, jadi tidak ada alur yang bisa ditambal. Digantikan akuntabilitas HR di tabel "Sudah Jalan". Jangan hidupkan lagi tanpa keputusan baru soal apakah karyawan mulai absen sendiri.
+**Anti-fraud check-in** (login karyawan, selfie, geolocation, device binding) — dibatalkan 2026-08-01. Digantikan akuntabilitas HR di tabel "Sudah Jalan".
+
+Catatan 2026-08-18: keputusan "karyawan tidak absen sendiri" **dibalik sebagian**. Karyawan kini absen sendiri lewat Panel Check In di PC umum (lihat bagian kios), karena kalau HR tidak masuk semua orang otomatis tercatat terlambat. Yang **tetap dibatalkan** adalah login per karyawan, selfie, geolocation, dan device binding — kios sengaja tanpa autentikasi apa pun.
 
 **Tampilan ponsel** — dibatalkan 2026-08-06 atas keputusan owner. Aplikasi ini **khusus desktop**: PC Windows (server) dan komputer client di jaringan kantor lewat browser, semuanya jauh di atas lebar yang dibutuhkan. Jangan habiskan waktu membuat tabel jadi kartu untuk layar sempit, menguji di lebar ponsel, atau mengganti `bg-fixed` demi Safari iOS.
 
@@ -103,6 +107,60 @@ Bagian ini memisahkan **yang sudah jalan di kode** dari **yang masih rencana**. 
   - `requireOwner` — harus login **dan** `role === 'owner'` (kalau bukan: 403)
 - Dua role: `hr` dan `owner` (constraint CHECK di tabel `accounts`)
 
+### Panel Check In tanpa login (kios)
+
+`/api/kiosk` adalah **satu-satunya** kelompok route yang terbuka tanpa sesi.
+Alasannya: kalau HR tidak masuk, tidak ada yang menceklis, dan semua karyawan
+otomatis tercatat terlambat. Kios menghapus ketergantungan itu.
+
+Karena terbuka untuk siapa pun yang bisa menjangkau server, kemampuannya
+dipangkas — batas ini **jangan dilonggarkan** tanpa alasan kuat:
+
+- hanya bisa mencatat **hadir** dan **jam pulang**
+- **tidak** bisa menandai izin / sakit / alpa
+- **tidak** bisa menandai banyak orang sekaligus
+- **tidak** bisa mengubah atau menimpa catatan yang sudah ada (HTTP 409)
+- **tidak** pernah mengembalikan data upah — jangan pakai ulang `toJson` dari
+  `routes/employees.js` di sini, fungsi itu membawa `dailyWage`
+- semua aksinya tetap masuk `audit_log` atas nama akun semu
+  `Absen Mandiri (kios)` (`accountId: 0`), jadi tetap bisa ditelusuri
+
+### Pengenalan wajah
+
+Ditambahkan 2026-08-18 karena panel ceklis nama saja masih bisa dititipkan
+ke teman. Aturan yang tidak boleh dilanggar:
+
+- **Pencocokan dikerjakan di server**, tidak pernah di browser. Mencocokkan
+  di browser berarti mengirim seluruh basis data wajah karyawan ke PC umum.
+  Browser hanya boleh mengirim satu descriptor hasil kameranya sendiri.
+- **Descriptor tidak boleh keluar lewat respons mana pun.** `/api/face/enrollments`
+  hanya mengembalikan jumlah sampel, dan `/api/kiosk/employees` hanya `hasFace`
+  bernilai benar/salah.
+- **Saat pencocokan gagal, nama kandidat terdekat tidak diberitahukan.** Kalau
+  diberitahu, kios berubah jadi alat menebak wajah siapa yang paling mendekati.
+- **Karyawan yang wajahnya sudah terdaftar tidak boleh absen lewat tombol
+  manual** (HTTP 403 di `routes/kiosk.js`). Kalau tombol itu tetap bisa dipakai,
+  kameranya tidak menghalangi apa pun. Tombol manual hanya tersisa untuk
+  karyawan yang belum didaftarkan, supaya penerapannya bisa bertahap.
+- **Berkas bobot model berakhiran `.weights`, bukan `.bin`.** Pemblokir iklan
+  dan antivirus rutin menghadang permintaan `.bin`; saat dihadang, face-api
+  gagal dengan pesan "tensor should have 432 values but has 0" yang sama sekali
+  tidak menyinggung soal pemblokiran. Nama itu ikut diubah di dalam
+  `*-weights_manifest.json`. Jangan dikembalikan ke `.bin`.
+- **Kamera hanya hidup di konteks aman**: HTTPS atau `localhost`. Lewat
+  `http://<IP-LAN>` objek `navigator.mediaDevices` bahkan tidak ada. Artinya
+  PC kios harus PC server itu sendiri, atau HTTPS harus disiapkan.
+- **Ambang jarak 0,5 plus selisih minimum 0,08** antara kandidat terbaik dan
+  kedua (`faceMatcher.js`). Dua kandidat yang berdempetan berarti sistemnya
+  sedang menebak, dan menebak berarti salah catat absensi orang lain.
+  Melonggarkan angka ini menukar keluhan "susah dikenali" dengan salah bayar.
+- **Foto bukti adalah pengaman yang sebenarnya**, bukan ambangnya. Sistem
+  pengenal wajah mana pun bisa dikelabui wajah di layar ponsel. Yang menahan
+  orang menitipkan absen adalah tahu setiap ceklis meninggalkan foto.
+  Disimpan 40 hari; tanggal terlama terhapus sendiri saat pemangkasan harian.
+- **Data biometrik**: UU PDP No. 27/2022 menggolongkannya data pribadi
+  spesifik. Persetujuan tertulis karyawan diurus di luar aplikasi.
+
 ## Struktur Folder
 
 ```
@@ -134,6 +192,8 @@ docs/superpowers/
 
 ### Modul kalkulasi murni (tanpa DB)
 
+- `faceMatcher.js` — jarak euclidean, ambang, dan aturan "ragu" untuk pencocokan wajah
+
 Logika perhitungan dipisah ke modul murni supaya gampang di-test tanpa DB. Jangan taruh query SQL di sini:
 - `scheduleResolver.js` — resolusi jadwal kerja berlaku pada tanggal tertentu, helper tanggal (`addDaysStr`, `dayOfWeek`)
 - `lateCalculator.js` — hitung potongan (`computeDeduction`). **Catatan:** `computeLateMinutes` di sini versi lama 2-parameter yang mengabaikan toleransi; yang dipakai payroll adalah versi 3-parameter di `scheduleResolver.js`. Jangan tertukar.
@@ -156,6 +216,8 @@ Semua di-mount di `server.js`, prefix `/api`:
 | `/api/payroll` | `routes/payroll.js` | |
 | `/api/late-policies` | `routes/latePolicies.js` | |
 | `/api/audit-log` | `routes/auditLog.js` | Owner only, hanya GET |
+| `/api/kiosk` | `routes/kiosk.js` | **TANPA login.** Sengaja dipersempit: hanya catat hadir & jam pulang, satu orang per aksi, tidak menimpa catatan yang sudah ada, tidak pernah mengembalikan data upah |
+| `/api/face` | `routes/face.js` | Butuh login. Pendaftaran wajah khusus Owner, foto bukti bisa dilihat HR. Descriptor tidak pernah ikut keluar |
 
 ## Konvensi Kode
 
@@ -167,6 +229,109 @@ Semua di-mount di `server.js`, prefix `/api`:
 - **Jam dari server, bukan dari client.** Frontend tidak pernah mengirim `checkInTime`/`checkOutTime`; server yang mengisi (lihat komentar di `storage.js`). Ini bagian dari anti-fraud.
 - Semua akses API dari frontend lewat `Storage` di `storage.js` — jangan `fetch()` langsung dari file view.
 - Periode payroll: **tanggal 28 bulan lalu s/d 27 bulan berjalan**, dipilih lewat query `?periodOffset=N` (0 = periode berjalan). Batasnya ada di konstanta `PERIOD_START_DAY`/`PERIOD_END_DAY`, **diduplikasi di 4 berkas** (`routes/payroll.js`, `frontend/js/owner.js`, `seedDemo.js`, `test/payroll.schedule.test.js`) karena frontend tanpa build step. Ubah keempatnya bersama, dan jaga selisihnya tetap satu hari.
+
+
+### Aturan UI/UX yang berlaku di seluruh panel
+
+Ditetapkan 2026-08-19 memakai skill `ui-ux-pro-max`. Empat aturan ini ditulis
+sekali di tempat bersama, bukan per panel, supaya panel baru ikut terurus
+tanpa perlu diingat.
+
+**1. Fokus keyboard — `:focus-visible`, bukan `:focus`.**
+Cincin fokus global didefinisikan di `index.html`. Jangan menambah
+`focus:ring-*` per elemen: `:focus` juga menyala saat diklik tetikus,
+sehingga tiap klik meninggalkan cincin yang tidak diminta. Cincinnya dua
+warna (garis gelap + halo putih) karena aplikasi ini punya dua latar yang
+sangat berbeda — kartu putih dan tekstur merah; satu warna saja hilang di
+salah satunya.
+
+**2. `prefers-reduced-motion` dihormati.**
+Blok `@media` di `index.html` memangkas semua transisi jadi 1ms. Sengaja 1ms
+dan bukan 0: sebagian browser melewatkan event `transitionend` pada durasi 0,
+dan kode yang menunggunya akan menggantung.
+
+**3. Galat form lewat `tampilkanGalatForm()` (`js/formUtils.js`).**
+Jangan menempelkan pesan galat langsung ke elemen. Fungsi itu menandai kolom
+yang salah (`aria-invalid`, garis merah, pesan menempel di bawahnya),
+memindahkan fokus ke sana, dan menyediakan ringkasan ber-`role="alert"`
+sebagai cadangan kalau kolomnya tidak ketahuan.
+
+Pola pencocokan pesan → kolom harus diambil dari kalimat yang **benar-benar**
+dikirim `backend/routes/*.js`. Menebaknya gagal diam-diam: pola
+`/kode karyawan/` tidak pernah cocok karena server menulis "Employee ID".
+
+**4. Keadaan kosong lewat `keadaanKosongHtml()` (`js/formUtils.js`).**
+Judul + kalimat penjelas, dan tombol **hanya** kalau ada yang bisa dikerjakan
+dari halaman yang sama. Tombolnya menekan tombol yang sudah ada
+(`aksiSelector`), bukan menyalin logikanya — supaya alurnya cuma perlu diubah
+di satu tempat. Panggil `pasangAksiKosong(wadah)` setelah HTML-nya ditempel.
+
+**5. Ikon berupa SVG, bukan emoji.** Emoji digambar font sistem, jadi bentuk
+dan warnanya berbeda di tiap komputer, tidak bisa mengikuti warna merek, dan
+dibacakan pembaca layar di tengah kalimat nama orang. `IKON_KUE_ULTAH` di
+`js/checklist.js` (jalur dari Heroicons, MIT) dipakai bersama oleh monitoring
+dan daftar karyawan.
+
+**6. Tindakan massal harus berupa tombol berlabel, bukan kotak-ceklis.**
+Di kepala tabel monitoring dulu ada kotak-ceklis "Checklist All". Kotak-ceklis
+di kepala tabel dibaca semua orang sebagai "pilih semua baris", padahal yang
+terjadi penulisan absensi belasan orang sekaligus — dan absensi menentukan
+gaji. Sekarang tombol `#btn-tandai-semua` berlabel "Tandai Semua Hadir".
+Berlaku untuk tindakan massal apa pun yang ditambahkan nanti.
+
+**7. Kios tidak menampilkan status pendaftaran wajah.** Lencana "wajah
+terdaftar / belum didaftarkan" sudah dibuang dari kartu kios. Kios berdiri di
+tempat umum, dan lencana itu mengumumkan kepada siapa saja yang lewat persis
+siapa yang masih bisa diabsenkan lewat tombol manual — daftar sasaran, di
+layar yang justru dipasang untuk menutup penitipan absen. Statusnya tetap ada
+di tab Wajah milik Owner, yang butuh login.
+
+**8. Wilayah yang berubah sendiri harus diumumkan.** Hasil absen kios
+(`#kiosk-hasil`), aba-aba kamera (`#kiosk-hint`), dan pesan daftar
+(`#kiosk-pesan`) memakai `aria-live="polite"`. Kegagalan dinaikkan jadi
+`role="alert"` supaya menyela: orang yang absennya DITOLAK perlu tahu sekarang
+juga, sebelum keburu pergi mengira sudah tercatat. Tabel monitoring memakai
+`aria-busy` selama memuat.
+
+**Sesi habis ditangani terpusat** di `apiRequest()` (`js/storage.js`): setiap
+401 selain `/api/login` menghentikan timer panel dan kembali ke halaman login
+dengan pesan. Sebelumnya tiap panel mencetak "Gagal memuat data: Belum login."
+di tengah layar merah tanpa tombol apa pun — dan itu yang dilihat HR tiap pagi
+setelah aplikasi ditinggal semalam.
+
+**Yang DITOLAK dari saran skill**: palet navy `#1E3A5F`, font Outfit/Work Sans
+dari Google Fonts CDN, pola halaman "Hero + Features + CTA", dan saran
+mobile-first. Merek KLC berasal dari mockup client, aplikasi wajib nol
+permintaan keluar, dan tampilan ponsel sudah dibatalkan owner. Yang diambil
+dari skill: disiplin *Minimalism & Swiss Style* untuk enterprise dashboard,
+plus checklist aksesibilitasnya.
+
+### Nominal rupiah
+
+Semua nominal uang lewat helper di `frontend/js/storage.js` — jangan
+memformat sendiri di tempat lain:
+
+- `formatRupiah(n)` → `"Rp1.500.000"` (untuk ditampilkan)
+- `formatRibuan(n)` → `"1.500.000"` (tanpa "Rp")
+- `parseRupiah(teks)` → angka, atau `null` kalau kosong
+- `pasangInputRupiah(input, onChange)` → membuat kotak isian memberi titik
+  pemisah sambil diketik
+
+Kotak isian nominal memakai `type="text"` + `inputmode="numeric"`, **bukan**
+`type="number"`. Kotak angka bawaan browser menganggap `"150.000"` nilai
+tidak sah dan mengosongkan `.value`-nya, jadi pemisah ribuan dan
+`type="number"` memang tidak bisa berjalan bersamaan. Akibatnya, nilai yang
+dibaca dari `FormData` berupa teks berpemisah titik dan **wajib** diurai
+dengan `parseRupiah`, bukan `Number`.
+
+Konsekuensi di server: `Number(null)` dan `Number('')` sama-sama bernilai 0
+dan lolos `Number.isFinite`, sehingga upah kosong bisa tersimpan diam-diam
+sebagai Rp0. `routes/employees.js` memeriksa kosong lebih dulu, terpisah dari
+pemeriksaan finite. Aturan yang sama berlaku kalau nanti ada kolom uang baru.
+
+Yang **tidak** diformat: kolom angka di CSV export. Excel membaca
+`"1.500.000"` sebagai teks, bukan angka, sehingga tidak bisa dijumlahkan.
+CSV tetap berisi angka polos.
 
 ## Command yang Sering Dipakai
 

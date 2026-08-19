@@ -163,12 +163,57 @@
        yang terlihat dan belangnya akan tampak acak. */
     .table-zebra tbody tr:nth-child(even) { background-color: #fafafa; }
     .table-zebra tbody tr:nth-child(even):hover { background-color: #fff7f7; }
+
+    /* ---------- Penanda fokus keyboard ----------
+
+       Dipakai :focus-visible, BUKAN :focus. Bedanya nyata: :focus juga menyala
+       saat tombol diklik dengan tetikus, sehingga setiap klik meninggalkan
+       cincin yang tidak diminta siapa pun. :focus-visible hanya menyala saat
+       fokus datang dari papan ketik.
+
+       Cincinnya dua warna, dan itu bukan hiasan: aplikasi ini memakai dua
+       latar yang sangat berbeda -- kartu putih dan tekstur merah tua. Cincin
+       gelap saja hilang di atas merah, cincin putih saja hilang di atas kartu.
+       Garis gelap ditemani halo putih di luarnya, jadi salah satunya selalu
+       terbaca di latar mana pun.
+
+       Ditulis sekali di sini, bukan sebagai kelas per elemen, supaya tombol
+       yang ditambahkan nanti ikut terurus tanpa perlu diingat. */
+    :focus-visible {
+      outline: 2px solid #0f172a;
+      outline-offset: 2px;
+      box-shadow: 0 0 0 5px rgba(255, 255, 255, .95);
+      border-radius: 6px;
+    }
+    /* Kolom isian sudah punya sudut sendiri; jangan dipaksa 6px. */
+    input:focus-visible, select:focus-visible, textarea:focus-visible {
+      border-radius: inherit;
+    }
+
+    /* ---------- Hormati setelan "kurangi gerak" ----------
+
+       Sebagian orang mual atau pusing oleh antarmuka yang bergerak, dan
+       Windows maupun macOS menyediakan setelan untuk memberitahukannya.
+       Tanpa blok ini setelan itu diabaikan sepenuhnya.
+
+       Transisi tidak dimatikan total melainkan dipangkas jadi 1ms: durasi 0
+       membuat sebagian browser melewatkan event transitionend, dan kode yang
+       menunggu event itu akan menggantung. */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 1ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 1ms !important;
+        scroll-behavior: auto !important;
+      }
+    }
   </style>
 </head>
 <body>
   <div id="app"></div>
 
   <script src="js/storage.js"></script>
+  <script src="js/formUtils.js"></script>
   <script src="js/auth.js"></script>
   <script src="js/tableUtils.js"></script>
   <script src="js/checklist.js"></script>
@@ -179,6 +224,10 @@
   <script src="js/auditView.js"></script>
   <script src="js/hr.js"></script>
   <script src="js/owner.js"></script>
+  <script src="vendor/face-api/face-api.js"></script>
+  <script src="js/faceEngine.js"></script>
+  <script src="js/faceEnroll.js"></script>
+  <script src="js/kiosk.js"></script>
   <script src="js/app.js"></script>
 </body>
 </html>

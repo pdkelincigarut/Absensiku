@@ -89,8 +89,17 @@ const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 function validateEmployeeBody(body, selfId) {
   const { name, dailyWage, employeeCode, jobId, organizationId, joinDate } = body;
 
-  if (!name || !name.trim() || !Number.isFinite(Number(dailyWage))) {
+  /* dailyWage diperiksa terhadap null/undefined/'' lebih dulu, TIDAK cukup
+     mengandalkan Number.isFinite: Number(null) dan Number('') sama-sama
+     bernilai 0, yang lolos pemeriksaan finite dan diam-diam menyimpan upah
+     Rp0. Sejak kotak isiannya berupa teks berpemisah titik, kiriman kosong
+     jadi jauh lebih mungkin terjadi daripada dulu. */
+  const upahKosong = dailyWage == null || String(dailyWage).trim() === '';
+  if (!name || !name.trim() || upahKosong || !Number.isFinite(Number(dailyWage))) {
     return 'Nama dan upah harian wajib diisi.';
+  }
+  if (Number(dailyWage) < 0) {
+    return 'Upah harian tidak boleh negatif.';
   }
 
   // Tanggal masuk boleh dikosongkan, tapi kalau diisi harus tanggal betulan.
