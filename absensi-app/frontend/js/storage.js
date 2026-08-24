@@ -311,8 +311,10 @@ const Storage = {
     return apiRequest('GET', `/api/face/photos${query ? `?${query}` : ''}`);
   },
 
-  async recordCheckOut(employeeId, date) {
-    // jam diambil dari jam server, tidak ada yang dikirim dari sini
-    return apiRequest('POST', `/api/attendance/${employeeId}/${date}/check-out`);
+  async recordCheckOut(employeeId, date, correction) {
+    // Tanpa `correction`: jam diambil dari jam server, tidak ada yang dikirim.
+    // Dengan `correction` ({ time, reason }): koreksi izin mendadak pulang
+    // lebih awal -- server mewajibkan reason saat time dikirim.
+    return apiRequest('POST', `/api/attendance/${employeeId}/${date}/check-out`, correction || undefined);
   }
 };

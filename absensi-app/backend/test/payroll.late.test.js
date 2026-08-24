@@ -2,10 +2,23 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { useTempDb, mountWithSession, startServer } = require('./helpers');
 
-function todayStr() {
-  const d = new Date();
-  const pad2 = n => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+const pad2 = n => String(n).padStart(2, '0');
+const dateToStr = d => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+
+/* Sama seperti payroll.js: periode berjalan mulai tanggal 28 bulan lalu. */
+const PERIOD_START_DAY = 28;
+
+/* Tanggal ini dites lewat rumus gaji LAMA (jam tetap, cap 8) -- lihat
+   WAGE_ENGINE_V2_FROM di routes/payroll.js. Dipakai awal periode berjalan,
+   bukan tanggal tetap, supaya selalu ada di dalam periode yang dibaca
+   endpoint tanpa perlu tahu tanggal hari ini menjalankan test. Begitu
+   tanggal ini sendiri lewat cutover (berbulan-bulan ke depan), test ini
+   perlu tanggal lain -- keterbatasan yang sama seperti setiap batas
+   berbasis waktu, bukan sesuatu yang perlu "diperbaiki" sekarang. */
+function preCutoverDate() {
+  const now = new Date();
+  const startMonth = now.getDate() >= PERIOD_START_DAY ? now.getMonth() : now.getMonth() - 1;
+  return dateToStr(new Date(now.getFullYear(), startMonth, PERIOD_START_DAY));
 }
 
 let db, server, port;
@@ -26,16 +39,16 @@ function insertEmployee(name, dailyWage) {
   return db.prepare('SELECT id FROM employees WHERE name = ?').get(name).id;
 }
 
-function insertHadirToday(employeeId, checkInTime) {
+function insertHadirPreCutover(employeeId, checkInTime) {
   db.prepare(`
     INSERT INTO attendance (employee_id, date, status, attendance_type, hours_worked, check_in_time, note, marked_by, updated_at)
     VALUES (?, ?, 'hadir', 'full', 8, ?, '', 'Test', ?)
-  `).run(employeeId, todayStr(), checkInTime, Date.now());
+  `).run(employeeId, preCutoverDate(), checkInTime, Date.now());
 }
 
 test('GET /api/payroll memotong gaji saat total menit telat melebihi ambang batas', async () => {
   const employeeId = insertEmployee('Telat Test', 100000);
-  insertHadirToday(employeeId, '09:15');
+  insertHadirPreCutover(employeeId, '09:15');
   // jadwal baku masuk 08:00 + toleransi 30 menit = batas 08:30, sama seperti sebelumnya
   db.prepare(`
     INSERT INTO late_policies (employee_id, grace_minutes, threshold_minutes, deduction_type, deduction_flat_amount, effective_from, created_at)
@@ -54,7 +67,7 @@ test('GET /api/payroll memotong gaji saat total menit telat melebihi ambang bata
 
 test('GET /api/payroll tidak memotong gaji kalau karyawan belum punya aturan keterlambatan', async () => {
   const employeeId = insertEmployee('Tanpa Aturan', 100000);
-  insertHadirToday(employeeId, '09:15');
+  insertHadirPreCutover(employeeId, '09:15');
 
   const res = await fetch(`http://localhost:${port}/api/payroll`);
   const data = await res.json();

@@ -73,6 +73,29 @@ function computeLateMinutes(checkInTime, startTime, graceMinutes) {
   return Math.max(0, timeToMinutes(checkInTime) - limit);
 }
 
+/* Upah dari jam kerja sungguhan, dipatok ke jendela jadwal: datang lebih
+   awal dari startTime atau pulang lebih lambat dari endTime tidak menambah
+   upah (itu bukan tujuan aturan ini -- lembur dicatat terpisah, tidak
+   dikonversi ke rupiah di sini). Checkout kosong berarti belum ada bukti
+   kerja sampai jam berapa, jadi tidak dibayar sampai dikoreksi HR. */
+function computeActualPay(checkInTime, checkOutTime, schedule) {
+  if (!checkInTime || !checkOutTime || !schedule) {
+    return { paidMinutes: 0, overtimeMinutes: 0 };
+  }
+  const start = timeToMinutes(schedule.startTime);
+  const end = timeToMinutes(schedule.endTime);
+  const checkIn = timeToMinutes(checkInTime);
+  const checkOut = timeToMinutes(checkOutTime);
+
+  const effectiveStart = Math.max(checkIn, start);
+  const effectiveEnd = Math.min(checkOut, end);
+
+  return {
+    paidMinutes: Math.max(0, effectiveEnd - effectiveStart),
+    overtimeMinutes: Math.max(0, checkOut - end)
+  };
+}
+
 function countScheduledDays(schedule, holidaySet, startDate, endDate) {
   if (!schedule || startDate > endDate) return 0;
   let count = 0;
@@ -92,5 +115,6 @@ module.exports = {
   isWorkday,
   resolveLatePolicy,
   computeLateMinutes,
+  computeActualPay,
   countScheduledDays
 };

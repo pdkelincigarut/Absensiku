@@ -28,11 +28,11 @@ Bagian ini memisahkan **yang sudah jalan di kode** dari **yang masih rencana**. 
 | Master jabatan & divisi | Lookup CRUD, satu router factory dipakai dua kali |
 | Monitoring absen harian | Tab Monitoring, refresh berkala (polling `setInterval`) |
 | Riwayat absensi | Filter per karyawan & per bulan |
-| Check-in / check-out | Jam diambil dari jam server, client tidak boleh kirim jam |
-| Jadwal kerja berversi | `work_schedules` + `effective_from`, ada jadwal baku perusahaan |
+| Check-in / check-out | Jam diambil dari jam server, client tidak boleh kirim jam. Pengecualian sempit: HR/Owner bisa **koreksi jam pulang** (`POST .../check-out` dengan `time` + `reason` wajib) untuk kasus izin mendadak — lihat bagian jam absen dari server di "Aturan & Konvensi Wajib" |
+| Jadwal kerja berversi | `work_schedules` + `effective_from`, ada jadwal baku perusahaan (07:30–16:30, masuk & pulang wajib) |
 | Hari libur | Input manual + auto-generate 4 libur nasional (Imlek, Idul Fitri, Idul Adha, Kemerdekaan) dengan flag `is_estimate` |
-| Aturan keterlambatan | Berversi, per karyawan, potongan flat / per-menit / persentase |
-| Laporan gaji | Periode 28 bulan lalu s/d 27 bulan berjalan, sudah hitung potongan telat |
+| Aturan keterlambatan | Berversi, per karyawan, potongan flat / per-menit / persentase — jalan sebagai lapisan potongan **tambahan** di atas pengurangan jam upah aktual |
+| Laporan gaji | Periode 28 bulan lalu s/d 27 bulan berjalan. Sejak `WAGE_ENGINE_V2_FROM` (2026-08-20), upah dihitung dari jam aktual masuk s/d pulang (menit, tidak dibulatkan) alih-alih 8 jam flat; lembur (pulang lewat 16:30) dicatat menitnya tapi **tidak** dikonversi ke rupiah, owner hitung manual saat export Excel akhir bulan. Lupa checkout = upah hari itu Rp0 sampai dikoreksi HR. Periode sebelum tanggal cutover tetap pakai formula lama (8 jam flat) — lihat spec `2026-08-20-perhitungan-gaji-jam-aktual-design.md` |
 | Audit log | Tabel `audit_log`, tab "Log Perubahan" khusus Owner, snapshot sebelum/sesudah tiap perubahan |
 | Koreksi wajib beralasan | `reason` wajib saat mengubah absensi yang sudah tercatat, opsional saat input pertama |
 | Soft delete karyawan | `employees.deleted_at`; laporan gaji periode lampau tidak bergeser |
@@ -72,6 +72,8 @@ Catatan 2026-08-18: keputusan "karyawan tidak absen sendiri" **dibalik sebagian*
 - Alasan wajib **hanya** saat mengubah baris yang sudah ada. Mewajibkannya di input pertama akan menghasilkan alasan "." yang menyamarkan koreksi sungguhan.
 - **Hari sebelum `employees.join_date` bukan alpa.** Karyawan yang bergabung di tengah periode tidak boleh terlihat bolos pada masa sebelum dia bekerja, dan gajinya tidak boleh terpotong karenanya. Absensi yang terlanjur tercatat sebelum tanggal itu **tetap dibayar** — catatan kehadiran adalah bukti, bukan tebakan. Karyawan tanpa `join_date` dihitung seperti sebelumnya (seluruh periode).
 - Jam absen selalu dari server. Jangan pernah terima `checkInTime` / `checkOutTime` dari body request, dan **jangan stempel ulang `check_in_time` yang sudah terisi** — potongan keterlambatan dihitung dari kolom itu.
+  **Pengecualian sempit & sadar**: `POST /api/attendance/:employeeId/:date/check-out` boleh menerima `time` dari body, khusus buat koreksi HR/Owner saat karyawan izin mendadak pulang cepat. Dibatasi ketat — `reason` wajib, jam tidak boleh lebih awal dari `check_in_time`, format divalidasi, tercatat di `audit_log` dengan alasannya, dan **hanya** lewat panel HR/Owner (tidak pernah dari kios). Jangan perlebar pola ini ke `checkInTime` atau ke rute lain tanpa alasan sekuat ini.
+- **Data berversi lewat konstanta cutover** untuk aturan yang tidak bisa dipasang `effective_from` di DB (mis. ganti rumus, bukan ganti baris data): `WAGE_ENGINE_V2_FROM` di `routes/payroll.js` menandai tanggal mulai formula upah jam-aktual. Baris `cursor >= WAGE_ENGINE_V2_FROM` pakai formula baru, sebelumnya pakai formula lama — supaya gaji periode yang sudah dibayar tidak pernah bergeser gara-gara perubahan rumus di kemudian hari. Pola sama kalau nanti ada perubahan rumus lain yang butuh titik potong tanggal.
 - **Desktop saja.** Boleh memakai tata letak yang butuh layar lebar. Lebar minimum tanpa geser mendatar: Laporan Gaji 1173px, Monitoring 1076px, sisanya di bawah 1000px. Tabel tetap dibungkus `overflow-x-auto` supaya layar yang lebih sempit masih bisa dipakai, tapi tampilan khusus ponsel bukan tujuan.
 
 ## Stack Teknologi

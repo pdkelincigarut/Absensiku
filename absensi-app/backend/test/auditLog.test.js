@@ -104,15 +104,15 @@ test('menyimpan ulang tanpa perubahan tidak minta alasan dan tidak menulis log',
    sekarang, sehingga mengoreksi catatan sore hari memindahkan jam masuk
    karyawan -- dan potongan keterlambatan dihitung dari kolom itu. */
 test('koreksi tidak menggeser jam masuk yang sudah tercatat', async () => {
-  await put('2026-09-05', { status: 'hadir', attendanceType: 'full' });
+  await put('2026-09-05', { status: 'hadir' });
   const id = attendanceId('2026-09-05');
   db.prepare('UPDATE attendance SET check_in_time = ? WHERE id = ?').run('07:58', id);
 
-  await put('2026-09-05', { status: 'hadir', attendanceType: 'half', reason: 'pulang cepat' });
+  await put('2026-09-05', { status: 'hadir', note: 'pulang cepat, izin', reason: 'catatan menyusul' });
 
   const row = db.prepare('SELECT check_in_time, hours_worked FROM attendance WHERE id = ?').get(id);
   assert.equal(row.check_in_time, '07:58', 'jam masuk asli harus dipertahankan');
-  assert.equal(row.hours_worked, 4);
+  assert.equal(row.hours_worked, 8, 'jam kerja tetap 8 -- upah sekarang dari check-in/check-out sungguhan, bukan pilihan tipe kehadiran');
 });
 
 test('hari yang berubah dari izin menjadi hadir mendapat jam masuk baru', async () => {

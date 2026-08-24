@@ -1,16 +1,33 @@
 /* ============================================================
    routes/payroll.js — Laporan gaji (dipindah dari owner.js lama)
-   Periode 28 bulan lalu s/d 27 bulan berjalan; upah = (min(jam,8)/8)
-   x upah harian per hari status hadir. Owner only.
+   Periode 28 bulan lalu s/d 27 bulan berjalan. Owner only.
+
+   Dua rumus upah per hari hadir, dipisah oleh WAGE_ENGINE_V2_FROM:
+   - Sebelum cutover: (min(jam,8)/8) x upah harian, dari hours_worked
+     tetap yang dulu dipilih HR saat menandai hadir.
+   - Dari cutover: dari jam kerja sungguhan (check_in_time..check_out_time)
+     dipatok ke jendela jadwal -- lihat computeActualPay di
+     scheduleResolver.js dan spec 2026-08-20-perhitungan-gaji-jam-aktual.
    ============================================================ */
 
 const express = require('express');
 const db = require('../db');
 const { requireOwner } = require('../middleware/auth');
 const { computeDeduction } = require('../lateCalculator');
-const { resolveSchedule, isWorkday, resolveLatePolicy, computeLateMinutes } = require('../scheduleResolver');
+const { resolveSchedule, isWorkday, resolveLatePolicy, computeLateMinutes, computeActualPay, timeToMinutes } = require('../scheduleResolver');
 
 const router = express.Router();
+
+/* Tanggal mulai berlakunya rumus gaji dari jam kerja aktual (lihat spec
+   2026-08-20-perhitungan-gaji-jam-aktual-design.md). Tanggal SEBELUM ini
+   tetap pakai rumus lama (jam tetap, cap 8) apa adanya -- kalau tidak,
+   periode yang sudah dibayar bisa bergeser, dan banyak data historis tidak
+   punya check_out_time sama sekali sehingga akan mendadak bergaji 0.
+
+   WAJIB disamakan dengan effective_from jadwal baku 07:30-16:30 yang
+   diinput owner di tab Jadwal Kerja -- kalau beda, ada rentang hari yang
+   rumusnya jalan di atas jadwal yang tidak sesuai. */
+const WAGE_ENGINE_V2_FROM = '2026-08-20';
 
 function pad2(n) { return String(n).padStart(2, '0'); }
 
@@ -150,11 +167,11 @@ router.get('/', requireOwner, (req, res) => {
 
   const rows = employees.map(emp => {
     const records = db.prepare(
-      `SELECT date, status, hours_worked, check_in_time FROM attendance WHERE employee_id = ? AND date >= ? AND date <= ?`
+      `SELECT date, status, hours_worked, check_in_time, check_out_time FROM attendance WHERE employee_id = ? AND date >= ? AND date <= ?`
     ).all(emp.id, startS, endS);
     const byDate = new Map(records.map(r => [r.date, r]));
 
-    const counts = { hadir: 0, izin: 0, sakit: 0, alpa: 0, totalHoursPaid: 0, totalWage: 0, lateMinutesTotal: 0, scheduledDays: 0 };
+    const counts = { hadir: 0, izin: 0, sakit: 0, alpa: 0, totalHoursPaid: 0, totalWage: 0, lateMinutesTotal: 0, overtimeMinutesTotal: 0, scheduledDays: 0 };
     let cursor = startS;
     while (cursor <= endS && cursor <= todayS) {
       const schedule = resolveSchedule(schedules, emp.id, cursor);
@@ -176,10 +193,27 @@ router.get('/', requireOwner, (req, res) => {
         // kalau dilewati, kerja lembur di hari Minggu jadi tidak dibayar.
         bumpStatus(counts, rec.status);
         if (rec.status === 'hadir') {
-          const paidHours = Math.min(rec.hours_worked || 0, 8);
-          counts.totalHoursPaid += paidHours;
-          counts.totalWage += (paidHours / 8) * emp.daily_wage;
+          /* Rumus lama tidak disentuh untuk tanggal sebelum cutover, supaya
+             periode yang sudah dibayar tidak bergeser (lihat komentar
+             WAGE_ENGINE_V2_FROM di atas). Dari cutover, upah dipatok ke jam
+             kerja sungguhan dalam jendela jadwal -- telat & pulang cepat
+             memotong sampai ke menit, lembur dicatat terpisah tanpa dibayar. */
+          if (cursor >= WAGE_ENGINE_V2_FROM) {
+            const { paidMinutes, overtimeMinutes } = computeActualPay(rec.check_in_time, rec.check_out_time, schedule);
+            counts.totalHoursPaid += paidMinutes / 60;
+            counts.overtimeMinutesTotal += overtimeMinutes;
+            const scheduledMinutes = schedule ? timeToMinutes(schedule.endTime) - timeToMinutes(schedule.startTime) : 0;
+            if (scheduledMinutes > 0) {
+              counts.totalWage += (paidMinutes / scheduledMinutes) * emp.daily_wage;
+            }
+          } else {
+            const paidHours = Math.min(rec.hours_worked || 0, 8);
+            counts.totalHoursPaid += paidHours;
+            counts.totalWage += (paidHours / 8) * emp.daily_wage;
+          }
 
+          // Potongan late_policies tidak berubah di kedua era -- lapisan
+          // tambahan di atas hasil rumus jam, bukan pengganti.
           const policy = resolveLatePolicy(policies, emp.id, cursor);
           if (policy && schedule) {
             counts.lateMinutesTotal += computeLateMinutes(rec.check_in_time, schedule.startTime, policy.graceMinutes);

@@ -73,7 +73,7 @@ router.get('/history', requireAuth, (req, res) => {
 
 router.put('/:employeeId/:date', requireAuth, (req, res) => {
   const { employeeId, date } = req.params;
-  const { status, attendanceType, hoursWorked, note, reason } = req.body || {};
+  const { status, note, reason } = req.body || {};
 
   if (!['hadir', 'izin', 'sakit', 'alpa'].includes(status)) {
     return res.status(400).json({ error: 'Status tidak valid.' });
@@ -85,15 +85,14 @@ router.put('/:employeeId/:date', requireAuth, (req, res) => {
 
   let finalType = null, finalHours = null, checkInTime = null;
   if (status === 'hadir') {
-    finalType = ['full', 'half', 'custom'].includes(attendanceType) ? attendanceType : 'full';
-    if (finalType === 'full') finalHours = 8;
-    else if (finalType === 'half') finalHours = 4;
-    else {
-      finalHours = Number(hoursWorked);
-      if (!finalHours || finalHours <= 0) {
-        return res.status(400).json({ error: 'Jumlah jam kerja harus lebih dari 0.' });
-      }
-    }
+    /* Tipe kehadiran & jam manual (dulu 'full'/'half'/'custom' pilihan HR)
+       dibuang -- upah sekarang dihitung dari jam check-in/check-out
+       sungguhan (scheduleResolver.computeActualPay), bukan dari pilihan di
+       sini. Kolom ini tetap ditulis nilai tetap supaya data lama & rumus
+       gaji versi lama (tanggal < WAGE_ENGINE_V2_FROM di routes/payroll.js)
+       tidak berubah bentuk. */
+    finalType = 'full';
+    finalHours = 8;
     // Jam masuk yang SUDAH tercatat dipertahankan. Sebelumnya baris ini selalu
     // menstempel ulang dengan jam sekarang, sehingga mengoreksi catatan pukul
     // 16:00 memindahkan jam masuk karyawan dari 08:00 ke 16:00 -- dan karena
@@ -221,9 +220,19 @@ router.post('/bulk-mark', requireAuth, (req, res) => {
 
 /* Jam pulang diambil dari jam server, sama seperti jam masuk — nilai dari
    client tidak pernah dipercaya. Memanggil ulang menimpa dengan jam terbaru,
-   yang berfungsi sebagai koreksi kalau HR menekannya kecepatan. */
+   yang berfungsi sebagai koreksi kalau HR menekannya kecepatan.
+
+   Satu pengecualian disengaja: body opsional { time, reason } untuk kasus
+   izin mendadak pulang lebih awal, saat HR baru sempat mencatatnya
+   belakangan dan jam server sudah tidak mencerminkan jam kejadian. Ini
+   satu-satunya tempat aplikasi menerima jam dari client untuk kolom jam
+   absensi -- ditutup dengan alasan wajib dan audit log lengkap, bukan
+   dipercaya mentah-mentah seperti jam kejadian biasa (lihat spec
+   2026-08-20-perhitungan-gaji-jam-aktual, bagian 6). Kios (routes/kiosk.js)
+   tidak pernah mengirim `time`, jadi tidak tersentuh oleh jalur ini. */
 router.post('/:employeeId/:date/check-out', requireAuth, (req, res) => {
   const { employeeId, date } = req.params;
+  const { time, reason } = req.body || {};
 
   const row = db.prepare('SELECT * FROM attendance WHERE employee_id = ? AND date = ?').get(employeeId, date);
   if (!row) return res.status(404).json({ error: 'Belum ada catatan absensi untuk hari ini.' });
@@ -234,15 +243,31 @@ router.post('/:employeeId/:date/check-out', requireAuth, (req, res) => {
     return res.status(400).json({ error: 'Jam masuk belum tercatat, jam pulang tidak bisa dicatat.' });
   }
 
+  const isCorrection = time != null && String(time).trim() !== '';
+  let checkOutTime = serverTimeStr();
+  if (isCorrection) {
+    if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) {
+      return res.status(400).json({ error: 'Format jam pulang tidak valid.' });
+    }
+    if (time < row.check_in_time) {
+      return res.status(400).json({ error: 'Jam pulang tidak boleh lebih awal dari jam masuk.' });
+    }
+    if (!String(reason || '').trim()) {
+      return res.status(400).json({ error: 'Alasan wajib diisi saat mengoreksi jam pulang.' });
+    }
+    checkOutTime = time;
+  }
+
   db.prepare('UPDATE attendance SET check_out_time = ?, marked_by = ?, updated_at = ? WHERE id = ?')
-    .run(serverTimeStr(), req.session.name, Date.now(), row.id);
+    .run(checkOutTime, req.session.name, Date.now(), row.id);
 
   recordAudit(req.session, {
     action: 'check_out',
     entity: 'attendance',
     entityId: row.id,
     before: row,
-    after: findRow(row.employee_id, row.date)
+    after: findRow(row.employee_id, row.date),
+    reason: isCorrection ? reason : undefined
   });
 
   const updated = db.prepare(`

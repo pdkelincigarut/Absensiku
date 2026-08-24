@@ -83,6 +83,76 @@ test('hari tanpa check-out mengembalikan checkOutTime null, bukan string kosong'
   assert.equal(record.checkOutTime, null);
 });
 
+/* ---------------- Checkout dengan koreksi (izin mendadak) ---------------- */
+
+function checkOutCorrection(date, body) {
+  return fetch(`http://localhost:${port}/api/attendance/${employeeId}/${date}/check-out`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+}
+
+test('checkout dengan time dan reason menyimpan jam yang dikirim', async () => {
+  await markAttendance('2026-08-20', 'hadir');
+  db.prepare('UPDATE attendance SET check_in_time = ? WHERE employee_id = ? AND date = ?')
+    .run('07:30', employeeId, '2026-08-20');
+
+  const res = await checkOutCorrection('2026-08-20', { time: '13:00', reason: 'izin mendadak, pulang lebih awal' });
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.equal(body.checkOutTime, '13:00');
+});
+
+test('checkout dengan time tanpa reason ditolak', async () => {
+  await markAttendance('2026-08-21', 'hadir');
+  db.prepare('UPDATE attendance SET check_in_time = ? WHERE employee_id = ? AND date = ?')
+    .run('07:30', employeeId, '2026-08-21');
+
+  const res = await checkOutCorrection('2026-08-21', { time: '13:00' });
+  assert.equal(res.status, 400);
+  assert.match((await res.json()).error, /alasan/i);
+});
+
+test('checkout dengan time lebih awal dari jam masuk ditolak', async () => {
+  await markAttendance('2026-08-22', 'hadir');
+  db.prepare('UPDATE attendance SET check_in_time = ? WHERE employee_id = ? AND date = ?')
+    .run('07:30', employeeId, '2026-08-22');
+
+  const res = await checkOutCorrection('2026-08-22', { time: '06:00', reason: 'salah catat' });
+  assert.equal(res.status, 400);
+  assert.match((await res.json()).error, /lebih awal/i);
+});
+
+test('checkout dengan format time tidak valid ditolak', async () => {
+  await markAttendance('2026-08-23', 'hadir');
+
+  const res = await checkOutCorrection('2026-08-23', { time: '25:99', reason: 'apa saja' });
+  assert.equal(res.status, 400);
+  assert.match((await res.json()).error, /format/i);
+});
+
+test('checkout dengan koreksi tercatat di audit log lengkap dengan alasan', async () => {
+  await markAttendance('2026-08-24', 'hadir');
+  db.prepare('UPDATE attendance SET check_in_time = ? WHERE employee_id = ? AND date = ?')
+    .run('07:30', employeeId, '2026-08-24');
+
+  await checkOutCorrection('2026-08-24', { time: '13:30', reason: 'anak sakit, izin pulang cepat' });
+
+  const id = db.prepare('SELECT id FROM attendance WHERE employee_id = ? AND date = ?').get(employeeId, '2026-08-24').id;
+  const log = db.prepare("SELECT * FROM audit_log WHERE entity = 'attendance' AND entity_id = ? AND action = 'check_out' ORDER BY id DESC LIMIT 1").get(String(id));
+  assert.equal(log.reason, 'anak sakit, izin pulang cepat');
+  assert.equal(JSON.parse(log.after_json).check_out_time, '13:30');
+});
+
+test('checkout tanpa body tetap memakai jam server, tidak wajib alasan', async () => {
+  await markAttendance('2026-08-25', 'hadir');
+
+  const res = await checkOut('2026-08-25');
+  assert.equal(res.status, 200);
+  assert.match((await res.json()).checkOutTime, /^\d{2}:\d{2}$/);
+});
+
 test('mengubah status hadir menjadi izin ikut menghapus jam pulang', async () => {
   await markAttendance('2026-08-11', 'hadir');
   await checkOut('2026-08-11');

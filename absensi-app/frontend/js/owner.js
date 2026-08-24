@@ -476,7 +476,7 @@ async function renderLaporanTab() {
            bertabrakan. -->
       <button id="btn-export" class="px-4 py-2 rounded-lg bg-white text-slate-700 hover:bg-slate-100 text-sm font-semibold shadow-lg shadow-black/20 h-fit">Download CSV</button>
     </div>
-    <p class="text-xs text-slate-400 mb-4">Laporan lengkap tersedia mulai tanggal ${PERIOD_START_DAY} setiap bulan. Upah dihitung otomatis per jam kerja (1 hari penuh = 8 jam); jam lembur di atas 8 jam tercatat tapi tidak menambah upah otomatis. Hari tanpa keterangan pada periode berjalan dianggap Alpa. Potongan keterlambatan dihitung otomatis dari aturan di tab Aturan Keterlambatan; gaji bersih tidak pernah kurang dari nol.</p>
+    <p class="text-xs text-slate-400 mb-4">Laporan lengkap tersedia mulai tanggal ${PERIOD_START_DAY} setiap bulan. Upah dihitung dari jam masuk sampai jam pulang sungguhan, dipatok ke jendela jadwal kerja — telat masuk dan pulang cepat memotong sampai ke menit. Kolom Lembur mencatat menit checkout lewat jadwal sebagai informasi saja, tidak dikonversi ke rupiah di sini. Hari tanpa keterangan pada periode berjalan dianggap Alpa. Potongan keterlambatan dihitung otomatis dari aturan di tab Aturan Keterlambatan, sebagai potongan tambahan di atas jam yang hilang; gaji bersih tidak pernah kurang dari nol.</p>
     <div class="bg-white border border-slate-200 rounded-xl overflow-hidden">
       <div class="overflow-x-auto">
         <table class="w-full text-sm table-zebra">
@@ -492,6 +492,7 @@ async function renderLaporanTab() {
               <th class="px-4 py-2.5 font-medium text-center">Upah Harian</th>
               <th class="px-4 py-2.5 font-medium text-center">Total Gaji</th>
               <th class="px-4 py-2.5 font-medium text-center">Menit Telat</th>
+              <th class="px-4 py-2.5 font-medium text-center">Lembur</th>
               <th class="px-4 py-2.5 font-medium text-center">Potongan</th>
               <th class="px-4 py-2.5 font-medium text-center">Gaji Bersih</th>
             </tr>
@@ -515,19 +516,19 @@ async function renderLaporanTab() {
 async function renderPayrollTable() {
   const tbody = document.getElementById('payroll-tbody');
   const tfoot = document.getElementById('payroll-tfoot');
-  tbody.innerHTML = `<tr><td colspan="11" class="px-4 py-8 text-center text-slate-400">Memuat...</td></tr>`;
+  tbody.innerHTML = `<tr><td colspan="12" class="px-4 py-8 text-center text-slate-400">Memuat...</td></tr>`;
   tfoot.innerHTML = '';
 
   let data;
   try {
     data = await Storage.getPayroll(OwnerState.periodOffset);
   } catch (err) {
-    tbody.innerHTML = `<tr><td colspan="11" class="px-4 py-8 text-center text-rose-500">Gagal memuat data: ${escapeHtml(err.message)}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="12" class="px-4 py-8 text-center text-rose-500">Gagal memuat data: ${escapeHtml(err.message)}</td></tr>`;
     return;
   }
 
   if (data.rows.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="11">${keadaanKosongHtml({
+    tbody.innerHTML = `<tr><td colspan="12">${keadaanKosongHtml({
       judul: 'Belum ada karyawan aktif',
       pesan: 'Laporan gaji hanya memuat karyawan yang berstatus aktif. Karyawan nonaktif tetap tersimpan, tapi tidak ikut dihitung.'
     })}</td></tr>`;
@@ -550,6 +551,9 @@ async function renderPayrollTable() {
       <!-- Sama seperti kolom Potongan: strip untuk karyawan yang belum punya
            aturan keterlambatan dibuat rata tengah, angkanya rata kiri. -->
       <td class="px-4 py-2.5 text-slate-600 ${r.latePolicy ? 'text-left' : 'text-center'}">${r.latePolicy ? r.lateMinutesTotal + ' mnt' : '&mdash;'}</td>
+      <!-- Informasi saja, tidak ada nominal di sampingnya -- owner hitung
+           sendiri uang lemburnya secara manual saat export ke Excel. -->
+      <td class="px-4 py-2.5 ${r.overtimeMinutesTotal > 0 ? 'text-left text-slate-600' : 'text-center text-slate-400'}">${r.overtimeMinutesTotal > 0 ? r.overtimeMinutesTotal + ' mnt' : '&mdash;'}</td>
       <!-- whitespace-nowrap: tanda minus sempat terpisah dari angkanya ke
            baris berikutnya, sehingga potongan terbaca seperti dua nilai. -->
       <!-- Nilainya rata kiri seperti kolom lain, tapi tanda strip saat tidak
@@ -563,10 +567,10 @@ async function renderPayrollTable() {
     <tr>
       <td class="px-4 py-3 font-normal text-slate-500" colspan="7">Total Gaji Kotor (sebelum potongan)</td>
       <td class="px-4 py-3 text-left text-slate-600">${formatRupiah(data.grandTotal)}</td>
-      <td colspan="3"></td>
+      <td colspan="4"></td>
     </tr>
     <tr>
-      <td class="px-4 py-3" colspan="10">Total Gaji Bersih Seluruh Karyawan</td>
+      <td class="px-4 py-3" colspan="11">Total Gaji Bersih Seluruh Karyawan</td>
       <td class="px-4 py-3 text-left text-klc-700">${formatRupiah(data.grandFinalTotal)}</td>
     </tr>
   `;
@@ -581,9 +585,11 @@ async function exportPayrollCsv() {
     return;
   }
 
-  const rows = [['Nama', 'Hadir', 'Izin', 'Sakit', 'Alpa', 'Total Jam Dibayar', 'Upah Harian', 'Total Gaji', 'Menit Telat', 'Potongan', 'Gaji Bersih']];
+  // Menit Lembur di akhir, murni informasi -- owner hitung sendiri uang
+  // lemburnya secara manual di Excel, kolom ini tidak dikonversi ke rupiah.
+  const rows = [['Nama', 'Hadir', 'Izin', 'Sakit', 'Alpa', 'Total Jam Dibayar', 'Upah Harian', 'Total Gaji', 'Menit Telat', 'Potongan', 'Gaji Bersih', 'Menit Lembur']];
   data.rows.forEach(r => {
-    rows.push([r.name, r.hadir, r.izin, r.sakit, r.alpa, r.totalHoursPaid, r.dailyWage, r.totalWage, r.lateMinutesTotal, r.deductionAmount, r.finalWage]);
+    rows.push([r.name, r.hadir, r.izin, r.sakit, r.alpa, r.totalHoursPaid, r.dailyWage, r.totalWage, r.lateMinutesTotal, r.deductionAmount, r.finalWage, r.overtimeMinutesTotal]);
   });
 
   const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');

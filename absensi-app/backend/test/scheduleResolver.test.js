@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const {
   dayOfWeek, resolveSchedule, isWorkday, resolveLatePolicy,
-  computeLateMinutes, countScheduledDays
+  computeLateMinutes, computeActualPay, countScheduledDays
 } = require('../scheduleResolver');
 
 /* ---------------- dayOfWeek ---------------- */
@@ -95,6 +95,64 @@ test('resolveLatePolicy memakai versi yang berlaku pada tanggal absensi', () => 
 
 test('resolveLatePolicy mengembalikan null untuk karyawan tanpa aturan', () => {
   assert.equal(resolveLatePolicy([POLICY_OLD], 8, '2026-07-15'), null);
+});
+
+/* ---------------- computeActualPay ---------------- */
+
+const SCHEDULE_0730_1630 = { startTime: '07:30', endTime: '16:30' };
+
+test('computeActualPay: tepat waktu penuh membayar seluruh jendela jadwal', () => {
+  const r = computeActualPay('07:30', '16:30', SCHEDULE_0730_1630);
+  assert.equal(r.paidMinutes, 540);
+  assert.equal(r.overtimeMinutes, 0);
+});
+
+test('computeActualPay: datang lebih awal tidak dapat bonus', () => {
+  const r = computeActualPay('07:00', '16:30', SCHEDULE_0730_1630);
+  assert.equal(r.paidMinutes, 540, 'dipatok mulai dari startTime, bukan jam datang');
+  assert.equal(r.overtimeMinutes, 0);
+});
+
+test('computeActualPay: telat masuk mengurangi upah dari jam masuk sungguhan', () => {
+  const r = computeActualPay('07:50', '16:30', SCHEDULE_0730_1630);
+  assert.equal(r.paidMinutes, 520); // 540 - 20 menit telat
+  assert.equal(r.overtimeMinutes, 0);
+});
+
+test('computeActualPay: pulang cepat mengurangi upah sampai checkout sungguhan', () => {
+  const r = computeActualPay('07:30', '16:00', SCHEDULE_0730_1630);
+  assert.equal(r.paidMinutes, 510); // 540 - 30 menit pulang cepat
+  assert.equal(r.overtimeMinutes, 0);
+});
+
+test('computeActualPay: telat masuk dan pulang cepat digabung', () => {
+  const r = computeActualPay('07:40', '16:15', SCHEDULE_0730_1630);
+  assert.equal(r.paidMinutes, 515); // 540 - 10 - 15
+  assert.equal(r.overtimeMinutes, 0);
+});
+
+test('computeActualPay: lembur dipatok ke endTime untuk upah, dicatat terpisah', () => {
+  const r = computeActualPay('07:30', '17:10', SCHEDULE_0730_1630);
+  assert.equal(r.paidMinutes, 540, 'upah tidak nambah gara-gara pulang lewat jadwal');
+  assert.equal(r.overtimeMinutes, 40);
+});
+
+test('computeActualPay: checkout kosong berarti belum dibayar', () => {
+  const r = computeActualPay('07:30', null, SCHEDULE_0730_1630);
+  assert.equal(r.paidMinutes, 0);
+  assert.equal(r.overtimeMinutes, 0);
+});
+
+test('computeActualPay: check-in kosong berarti belum dibayar', () => {
+  const r = computeActualPay(null, '16:30', SCHEDULE_0730_1630);
+  assert.equal(r.paidMinutes, 0);
+  assert.equal(r.overtimeMinutes, 0);
+});
+
+test('computeActualPay: jadwal null berarti belum dibayar', () => {
+  const r = computeActualPay('07:30', '16:30', null);
+  assert.equal(r.paidMinutes, 0);
+  assert.equal(r.overtimeMinutes, 0);
 });
 
 /* ---------------- countScheduledDays ---------------- */

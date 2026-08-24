@@ -24,10 +24,15 @@ const STATUS_BADGE_CLASS = {
   alpa: 'bg-rose-100 text-rose-700 border-rose-200'
 };
 
+/* 'half'/'custom' TIDAK BISA dipilih lagi -- panel absensi sekarang cuma
+   mencatat jam masuk, upah dari jam check-in/check-out sungguhan (lihat
+   scheduleResolver.computeActualPay di backend). Labelnya dipertahankan
+   di sini semata supaya Riwayat Absensi masih bisa menampilkan data lama
+   yang masih menyimpan nilai itu. */
 const ATTENDANCE_TYPE_LABEL = {
-  full: 'Full Day',
-  half: 'Setengah Hari',
-  custom: 'Jam Tertentu'
+  full: 'Hadir',
+  half: 'Setengah Hari (lama)',
+  custom: 'Jam Tertentu (lama)'
 };
 
 function escapeHtml(str) {
@@ -290,25 +295,47 @@ async function renderMonitoringList(containerEl, employees, date, accountName) {
 
 function renderAttendancePanel(containerEl, emp, rec, date, accountName, onSaved) {
   const currentStatus = rec ? rec.status : 'hadir';
-  const currentType = (rec && rec.attendanceType) || 'full';
-  const currentHours = rec && rec.hoursWorked != null ? rec.hoursWorked : '';
 
   containerEl.innerHTML = `
     <div class="border border-slate-200 rounded-xl bg-white p-4 mt-1">
       <p class="text-xs text-slate-400 mb-3">Ceklis kehadiran — ${escapeHtml(emp.name)} &middot; ${formatTanggalIndo(date)}</p>
 
       ${rec && rec.status === 'hadir' ? `
-        <div class="flex items-center gap-3 mb-4 pb-4 border-b border-slate-100">
-          <div class="text-sm">
-            <span class="text-slate-500">Jam masuk</span>
-            <span class="font-mono text-slate-700 ml-1">${escapeHtml(rec.checkInTime || '—')}</span>
-            <span class="text-slate-300 mx-1.5">&middot;</span>
-            <span class="text-slate-500">Jam pulang</span>
-            <span class="font-mono ${rec.checkOutTime ? 'text-slate-700' : 'text-slate-400'} ml-1">${rec.checkOutTime ? escapeHtml(rec.checkOutTime) : 'belum dicatat'}</span>
+        <div class="mb-4 pb-4 border-b border-slate-100">
+          <div class="flex items-center gap-3">
+            <div class="text-sm">
+              <span class="text-slate-500">Jam masuk</span>
+              <span class="font-mono text-slate-700 ml-1">${escapeHtml(rec.checkInTime || '—')}</span>
+              <span class="text-slate-300 mx-1.5">&middot;</span>
+              <span class="text-slate-500">Jam pulang</span>
+              <span class="font-mono ${rec.checkOutTime ? 'text-slate-700' : 'text-slate-400'} ml-1">${rec.checkOutTime ? escapeHtml(rec.checkOutTime) : 'belum dicatat'}</span>
+            </div>
+            <button type="button" class="btn-check-out px-3 py-1.5 rounded-lg border border-slate-300 text-slate-600 text-sm font-medium hover:bg-slate-50 ml-auto">
+              ${rec.checkOutTime ? 'Perbarui Jam Pulang' : 'Catat Jam Pulang'}
+            </button>
           </div>
-          <button type="button" class="btn-check-out px-3 py-1.5 rounded-lg border border-slate-300 text-slate-600 text-sm font-medium hover:bg-slate-50 ml-auto">
-            ${rec.checkOutTime ? 'Perbarui Jam Pulang' : 'Catat Jam Pulang'}
+          <button type="button" class="btn-toggle-koreksi-pulang mt-2 text-xs font-medium text-klc-600 hover:text-klc-700 underline underline-offset-2">
+            Koreksi jam pulang (izin mendadak)
           </button>
+          <!-- Upah sekarang dari jam pulang sungguhan, jadi jam kejadian tetap
+               dari server -- kecuali di sini: HR menuliskan jam yang benar-benar
+               terjadi untuk kasus izin mendadak, wajib disertai keterangan.
+               Satu-satunya tempat aplikasi menerima jam dari client. -->
+          <div class="koreksi-pulang-form hidden mt-2 space-y-2 bg-slate-50 border border-slate-200 rounded-lg p-3">
+            <div>
+              <label class="text-xs text-slate-500 block mb-1">Jam pulang sebenarnya</label>
+              <input type="time" name="koreksiJamPulang" class="border border-slate-300 rounded-lg px-3 py-1.5 text-sm" />
+            </div>
+            <div>
+              <label class="text-xs text-slate-500 block mb-1">Keterangan <span class="text-rose-600">*</span></label>
+              <textarea name="koreksiKeterangan" rows="2" class="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm" placeholder="Contoh: izin pulang lebih awal, anak sakit"></textarea>
+            </div>
+            <p class="koreksi-pulang-error text-xs text-rose-600 hidden"></p>
+            <div class="flex gap-2">
+              <button type="button" class="btn-batal-koreksi-pulang px-3 py-1.5 rounded-lg border border-slate-300 text-slate-600 text-xs font-medium">Batal</button>
+              <button type="button" class="btn-simpan-koreksi-pulang px-3 py-1.5 rounded-lg bg-klc-600 text-white text-xs font-medium hover:bg-klc-700 disabled:opacity-50 disabled:cursor-not-allowed" disabled>Simpan Koreksi</button>
+            </div>
+          </div>
         </div>
       ` : ''}
 
@@ -323,23 +350,8 @@ function renderAttendancePanel(containerEl, emp, rec, date, accountName, onSaved
         </div>
 
         <div class="hadir-fields space-y-3">
-          <div>
-            <label class="text-sm text-slate-500 block mb-1">Tipe Kehadiran</label>
-            <div class="grid grid-cols-3 gap-2 max-w-sm">
-              ${['full', 'half', 'custom'].map(t => `
-                <label class="flex items-center justify-center gap-1 border rounded-lg px-2 py-2 cursor-pointer text-xs has-[:checked]:border-klc-500 has-[:checked]:bg-klc-50">
-                  <input type="radio" name="attendanceType" value="${t}" ${currentType === t ? 'checked' : ''} class="accent-klc-600" />
-                  <span>${ATTENDANCE_TYPE_LABEL[t]}</span>
-                </label>
-              `).join('')}
-            </div>
-          </div>
-          <div class="custom-hours-field ${currentType === 'custom' ? '' : 'hidden'} max-w-xs">
-            <label class="text-sm text-slate-500 block mb-1">Jumlah Jam Kerja</label>
-            <input type="number" name="customHours" min="0.5" step="0.5" value="${currentType === 'custom' ? currentHours : ''}" placeholder="Contoh: 3 — boleh lebih dari 8 untuk lembur" class="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm" />
-          </div>
           <div class="bg-slate-100 border border-slate-200 rounded-lg px-3 py-2 text-xs text-slate-500 max-w-sm">
-            Jam masuk diambil dari jam server saat disimpan (perkiraan sekarang <span class="font-mono font-semibold text-slate-700">${nowTimeStr()}</span>) — tidak bisa diketik manual.
+            Jam masuk diambil dari jam server saat disimpan (perkiraan sekarang <span class="font-mono font-semibold text-slate-700">${nowTimeStr()}</span>) — tidak bisa diketik manual. Upah dihitung dari jam masuk sampai jam pulang sungguhan, bukan dari tipe kehadiran.
           </div>
         </div>
 
@@ -381,19 +393,52 @@ function renderAttendancePanel(containerEl, emp, rec, date, accountName, onSaved
     });
   }
 
+  const toggleKoreksiBtn = containerEl.querySelector('.btn-toggle-koreksi-pulang');
+  const koreksiForm = containerEl.querySelector('.koreksi-pulang-form');
+  if (toggleKoreksiBtn && koreksiForm) {
+    toggleKoreksiBtn.addEventListener('click', () => {
+      koreksiForm.classList.toggle('hidden');
+    });
+
+    const timeInput = koreksiForm.querySelector('[name="koreksiJamPulang"]');
+    const ketInput = koreksiForm.querySelector('[name="koreksiKeterangan"]');
+    const simpanKoreksiBtn = koreksiForm.querySelector('.btn-simpan-koreksi-pulang');
+    const koreksiErr = koreksiForm.querySelector('.koreksi-pulang-error');
+
+    // Tombol simpan mati sampai kedua kolom terisi -- server tetap
+    // memvalidasi ulang, ini cuma mencegah penolakan yang sudah pasti terjadi.
+    const syncKoreksiState = () => {
+      simpanKoreksiBtn.disabled = !timeInput.value || !ketInput.value.trim();
+    };
+    timeInput.addEventListener('input', syncKoreksiState);
+    ketInput.addEventListener('input', syncKoreksiState);
+    syncKoreksiState();
+
+    koreksiForm.querySelector('.btn-batal-koreksi-pulang').addEventListener('click', () => {
+      koreksiForm.classList.add('hidden');
+      koreksiErr.classList.add('hidden');
+    });
+
+    simpanKoreksiBtn.addEventListener('click', async () => {
+      koreksiErr.classList.add('hidden');
+      simpanKoreksiBtn.disabled = true;
+      try {
+        await Storage.recordCheckOut(emp.id, date, { time: timeInput.value, reason: ketInput.value.trim() });
+        onSaved();
+      } catch (err) {
+        koreksiErr.textContent = err.message;
+        koreksiErr.classList.remove('hidden');
+        simpanKoreksiBtn.disabled = false;
+      }
+    });
+  }
+
   const toggleHadirFields = () => {
     const status = form.querySelector('input[name="status"]:checked').value;
     form.querySelector('.hadir-fields').style.display = status === 'hadir' ? 'block' : 'none';
   };
   form.querySelectorAll('input[name="status"]').forEach(r => r.addEventListener('change', toggleHadirFields));
   toggleHadirFields();
-
-  const toggleCustomHours = () => {
-    const type = form.querySelector('input[name="attendanceType"]:checked')?.value;
-    form.querySelector('.custom-hours-field').classList.toggle('hidden', type !== 'custom');
-  };
-  form.querySelectorAll('input[name="attendanceType"]').forEach(r => r.addEventListener('change', toggleCustomHours));
-  toggleCustomHours();
 
   form.querySelector('.btn-close-panel').addEventListener('click', () => {
     containerEl.closest('.panel-row').classList.add('hidden');
@@ -421,20 +466,6 @@ function renderAttendancePanel(containerEl, emp, rec, date, accountName, onSaved
     const status = fd.get('status');
     bersihkanGalatForm(form);
 
-    let attendanceType = null, hoursWorked = null;
-    if (status === 'hadir') {
-      attendanceType = fd.get('attendanceType') || 'full';
-      if (attendanceType === 'full') hoursWorked = 8;
-      else if (attendanceType === 'half') hoursWorked = 4;
-      else {
-        hoursWorked = Number(fd.get('customHours'));
-        if (!hoursWorked || hoursWorked <= 0) {
-          tampilkanGalatForm(form, 'Jumlah jam kerja harus lebih dari 0.', [[/jam/i, 'customHours']]);
-          return;
-        }
-      }
-    }
-
     const submitBtn = form.querySelector('button[type="submit"]');
     submitBtn.disabled = true;
     try {
@@ -442,14 +473,12 @@ function renderAttendancePanel(containerEl, emp, rec, date, accountName, onSaved
         employeeId: emp.id,
         date,
         status,
-        attendanceType,
-        hoursWorked,
         note: fd.get('note') || '',
         reason: fd.get('reason') || ''
       });
       if (onSaved) onSaved();
     } catch (err) {
-      tampilkanGalatForm(e.target, err.message, [[/alasan/i, 'reason'], [/jam kerja/i, 'customHours'], [/catatan/i, 'note']]);
+      tampilkanGalatForm(e.target, err.message, [[/alasan/i, 'reason'], [/catatan/i, 'note']]);
       submitBtn.disabled = false;
     }
   });
