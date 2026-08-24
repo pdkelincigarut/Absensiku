@@ -293,6 +293,77 @@ async function renderMonitoringList(containerEl, employees, date, accountName) {
   }
 }
 
+/* Jam masuk & jam pulang di panel ini datang dari dua sumber berbeda dengan
+   sengaja: jam masuk selalu dari server (hari ini), jam pulang boleh diketik
+   manual kalau baris yang dikoreksi BUKAN hari ini -- misal HR baru sempat
+   membereskan karyawan yang lupa checkout kemarin. Jam server "sekarang" di
+   situ bukan jam kejadian sama sekali, dan karena upah & lembur sekarang
+   dihitung dari check_out_time (computeActualPay di scheduleResolver.js),
+   menstempelnya diam-diam akan mencemari kedua angka itu -- backend menolak
+   percobaan itu (lihat serverDateStr() di routes/attendance.js), jadi
+   tombol "jam sekarang" di sini pun sengaja tidak ditawarkan untuk tanggal
+   lain. Satu-satunya jalan buat tanggal lain: form jam manual + alasan. */
+function renderCheckOutBlock(rec, date) {
+  const jamMasukPulang = `
+    <div class="text-sm">
+      <span class="text-slate-500">Jam masuk</span>
+      <span class="font-mono text-slate-700 ml-1">${escapeHtml(rec.checkInTime || '—')}</span>
+      <span class="text-slate-300 mx-1.5">&middot;</span>
+      <span class="text-slate-500">Jam pulang</span>
+      <span class="font-mono ${rec.checkOutTime ? 'text-slate-700' : 'text-slate-400'} ml-1">${rec.checkOutTime ? escapeHtml(rec.checkOutTime) : 'belum dicatat'}</span>
+    </div>`;
+
+  const formKoreksi = `
+    <div>
+      <label class="text-xs text-slate-500 block mb-1">Jam pulang sebenarnya</label>
+      <input type="time" name="koreksiJamPulang" class="border border-slate-300 rounded-lg px-3 py-1.5 text-sm" />
+    </div>
+    <div>
+      <label class="text-xs text-slate-500 block mb-1">Keterangan <span class="text-rose-600">*</span></label>
+      <textarea name="koreksiKeterangan" rows="2" class="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm" placeholder="Contoh: lupa checkout, karyawan konfirmasi pulang jam 16.30"></textarea>
+    </div>
+    <p class="koreksi-pulang-error text-xs text-rose-600 hidden"></p>`;
+
+  if (date !== todayStr()) {
+    // Tanggal lampau: jam server "sekarang" mustahil jadi jam pulang yang
+    // benar (bisa selisih berhari-hari), jadi satu-satunya opsi langsung
+    // ditampilkan, bukan disembunyikan di balik toggle.
+    return `
+      <div class="mb-4 pb-4 border-b border-slate-100">
+        <div class="mb-2">${jamMasukPulang}</div>
+        <p class="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-2">
+          Tanggal ini bukan hari ini — jam pulang wajib diketik sesuai bukti/keterangan karyawan, bukan jam saat disimpan.
+        </p>
+        <div class="koreksi-pulang-form mt-2 space-y-2 bg-slate-50 border border-slate-200 rounded-lg p-3">
+          ${formKoreksi}
+          <div class="flex gap-2">
+            <button type="button" class="btn-simpan-koreksi-pulang px-3 py-1.5 rounded-lg bg-klc-600 text-white text-xs font-medium hover:bg-klc-700 disabled:opacity-50 disabled:cursor-not-allowed" disabled>Simpan Jam Pulang</button>
+          </div>
+        </div>
+      </div>`;
+  }
+
+  return `
+    <div class="mb-4 pb-4 border-b border-slate-100">
+      <div class="flex items-center gap-3">
+        ${jamMasukPulang}
+        <button type="button" class="btn-check-out px-3 py-1.5 rounded-lg border border-slate-300 text-slate-600 text-sm font-medium hover:bg-slate-50 ml-auto">
+          ${rec.checkOutTime ? 'Perbarui Jam Pulang' : 'Catat Jam Pulang'}
+        </button>
+      </div>
+      <button type="button" class="btn-toggle-koreksi-pulang mt-2 text-xs font-medium text-klc-600 hover:text-klc-700 underline underline-offset-2">
+        Koreksi jam pulang (izin mendadak)
+      </button>
+      <div class="koreksi-pulang-form hidden mt-2 space-y-2 bg-slate-50 border border-slate-200 rounded-lg p-3">
+        ${formKoreksi}
+        <div class="flex gap-2">
+          <button type="button" class="btn-batal-koreksi-pulang px-3 py-1.5 rounded-lg border border-slate-300 text-slate-600 text-xs font-medium">Batal</button>
+          <button type="button" class="btn-simpan-koreksi-pulang px-3 py-1.5 rounded-lg bg-klc-600 text-white text-xs font-medium hover:bg-klc-700 disabled:opacity-50 disabled:cursor-not-allowed" disabled>Simpan Koreksi</button>
+        </div>
+      </div>
+    </div>`;
+}
+
 function renderAttendancePanel(containerEl, emp, rec, date, accountName, onSaved) {
   const currentStatus = rec ? rec.status : 'hadir';
 
@@ -300,44 +371,7 @@ function renderAttendancePanel(containerEl, emp, rec, date, accountName, onSaved
     <div class="border border-slate-200 rounded-xl bg-white p-4 mt-1">
       <p class="text-xs text-slate-400 mb-3">Ceklis kehadiran — ${escapeHtml(emp.name)} &middot; ${formatTanggalIndo(date)}</p>
 
-      ${rec && rec.status === 'hadir' ? `
-        <div class="mb-4 pb-4 border-b border-slate-100">
-          <div class="flex items-center gap-3">
-            <div class="text-sm">
-              <span class="text-slate-500">Jam masuk</span>
-              <span class="font-mono text-slate-700 ml-1">${escapeHtml(rec.checkInTime || '—')}</span>
-              <span class="text-slate-300 mx-1.5">&middot;</span>
-              <span class="text-slate-500">Jam pulang</span>
-              <span class="font-mono ${rec.checkOutTime ? 'text-slate-700' : 'text-slate-400'} ml-1">${rec.checkOutTime ? escapeHtml(rec.checkOutTime) : 'belum dicatat'}</span>
-            </div>
-            <button type="button" class="btn-check-out px-3 py-1.5 rounded-lg border border-slate-300 text-slate-600 text-sm font-medium hover:bg-slate-50 ml-auto">
-              ${rec.checkOutTime ? 'Perbarui Jam Pulang' : 'Catat Jam Pulang'}
-            </button>
-          </div>
-          <button type="button" class="btn-toggle-koreksi-pulang mt-2 text-xs font-medium text-klc-600 hover:text-klc-700 underline underline-offset-2">
-            Koreksi jam pulang (izin mendadak)
-          </button>
-          <!-- Upah sekarang dari jam pulang sungguhan, jadi jam kejadian tetap
-               dari server -- kecuali di sini: HR menuliskan jam yang benar-benar
-               terjadi untuk kasus izin mendadak, wajib disertai keterangan.
-               Satu-satunya tempat aplikasi menerima jam dari client. -->
-          <div class="koreksi-pulang-form hidden mt-2 space-y-2 bg-slate-50 border border-slate-200 rounded-lg p-3">
-            <div>
-              <label class="text-xs text-slate-500 block mb-1">Jam pulang sebenarnya</label>
-              <input type="time" name="koreksiJamPulang" class="border border-slate-300 rounded-lg px-3 py-1.5 text-sm" />
-            </div>
-            <div>
-              <label class="text-xs text-slate-500 block mb-1">Keterangan <span class="text-rose-600">*</span></label>
-              <textarea name="koreksiKeterangan" rows="2" class="w-full border border-slate-300 rounded-lg px-3 py-1.5 text-sm" placeholder="Contoh: izin pulang lebih awal, anak sakit"></textarea>
-            </div>
-            <p class="koreksi-pulang-error text-xs text-rose-600 hidden"></p>
-            <div class="flex gap-2">
-              <button type="button" class="btn-batal-koreksi-pulang px-3 py-1.5 rounded-lg border border-slate-300 text-slate-600 text-xs font-medium">Batal</button>
-              <button type="button" class="btn-simpan-koreksi-pulang px-3 py-1.5 rounded-lg bg-klc-600 text-white text-xs font-medium hover:bg-klc-700 disabled:opacity-50 disabled:cursor-not-allowed" disabled>Simpan Koreksi</button>
-            </div>
-          </div>
-        </div>
-      ` : ''}
+      ${rec && rec.status === 'hadir' ? renderCheckOutBlock(rec, date) : ''}
 
       <form class="space-y-4">
         <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 max-w-lg">
@@ -395,11 +429,16 @@ function renderAttendancePanel(containerEl, emp, rec, date, accountName, onSaved
 
   const toggleKoreksiBtn = containerEl.querySelector('.btn-toggle-koreksi-pulang');
   const koreksiForm = containerEl.querySelector('.koreksi-pulang-form');
+
+  // Tombol toggle cuma ada di jalur hari ini -- di jalur tanggal lampau
+  // form koreksi sudah langsung tampil, tidak ada yang perlu disembunyikan.
   if (toggleKoreksiBtn && koreksiForm) {
     toggleKoreksiBtn.addEventListener('click', () => {
       koreksiForm.classList.toggle('hidden');
     });
+  }
 
+  if (koreksiForm) {
     const timeInput = koreksiForm.querySelector('[name="koreksiJamPulang"]');
     const ketInput = koreksiForm.querySelector('[name="koreksiKeterangan"]');
     const simpanKoreksiBtn = koreksiForm.querySelector('.btn-simpan-koreksi-pulang');
@@ -414,10 +453,13 @@ function renderAttendancePanel(containerEl, emp, rec, date, accountName, onSaved
     ketInput.addEventListener('input', syncKoreksiState);
     syncKoreksiState();
 
-    koreksiForm.querySelector('.btn-batal-koreksi-pulang').addEventListener('click', () => {
-      koreksiForm.classList.add('hidden');
-      koreksiErr.classList.add('hidden');
-    });
+    const batalBtn = koreksiForm.querySelector('.btn-batal-koreksi-pulang');
+    if (batalBtn) {
+      batalBtn.addEventListener('click', () => {
+        koreksiForm.classList.add('hidden');
+        koreksiErr.classList.add('hidden');
+      });
+    }
 
     simpanKoreksiBtn.addEventListener('click', async () => {
       koreksiErr.classList.add('hidden');

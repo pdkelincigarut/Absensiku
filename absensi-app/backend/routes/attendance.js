@@ -20,6 +20,10 @@ function serverTimeStr() {
   const d = new Date();
   return pad2(d.getHours()) + ':' + pad2(d.getMinutes());
 }
+function serverDateStr() {
+  const d = new Date();
+  return d.getFullYear() + '-' + pad2(d.getMonth() + 1) + '-' + pad2(d.getDate());
+}
 
 function toJson(row) {
   return {
@@ -244,6 +248,16 @@ router.post('/:employeeId/:date/check-out', requireAuth, (req, res) => {
   }
 
   const isCorrection = time != null && String(time).trim() !== '';
+  /* Jam server cuma masuk akal buat hari INI. Kalau baris ini tanggalnya
+     hari lain (HR baru sempat mengoreksi besoknya karena karyawan lupa
+     checkout), jam sekarang bukan jam kejadian sama sekali -- dan karena
+     upah & lembur sekarang dihitung dari check_out_time (computeActualPay
+     di scheduleResolver.js), menstempelnya diam-diam mencemari kedua
+     angka itu. Untuk tanggal lain, jam pulang WAJIB diketik manual lewat
+     `time` + `reason`. */
+  if (!isCorrection && date !== serverDateStr()) {
+    return res.status(400).json({ error: 'Tanggal ini bukan hari ini. Isi jam pulang yang sebenarnya beserta alasan -- jam server sekarang tidak boleh dipakai untuk tanggal lampau.' });
+  }
   let checkOutTime = serverTimeStr();
   if (isCorrection) {
     if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(time)) {
