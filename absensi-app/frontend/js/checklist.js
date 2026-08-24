@@ -486,6 +486,45 @@ function renderAttendancePanel(containerEl, emp, rec, date, accountName, onSaved
 
 /* ---------------- Riwayat Absensi ---------------- */
 
+// Jadwal baku 07:30-16:30 = 9 jam. Dipakai cuma buat mewarnai kolom Jam
+// Kerja di riwayat, bukan sumber kebenaran upah (itu tetap di server).
+const JAM_KERJA_WAJIB_MENIT = 9 * 60;
+
+/* Kolom Tipe & Jam Kerja lama menampilkan attendanceType/hoursWorked --
+   angka tetap yang dulu dipilih HR (full/half/custom), bukan jam kerja
+   sungguhan. Sejak upah dihitung dari check-in/check-out sungguhan
+   (scheduleResolver.computeActualPay di backend), kolom itu berhenti
+   mencerminkan apa pun yang nyata. Diganti satu kolom yang menghitung
+   ulang durasinya sendiri di sini: checkout - checkin kalau sudah pulang,
+   atau jam sekarang - checkin kalau harinya hari ini dan belum checkout. */
+function formatJamKerjaHistory(r) {
+  if (r.status !== 'hadir' || !r.checkInTime) return '<span class="text-slate-400">-</span>';
+
+  const [jamMasuk, menitMasuk] = r.checkInTime.split(':').map(Number);
+  const mulaiMenit = jamMasuk * 60 + menitMasuk;
+
+  let akhirMenit, berjalan = false;
+  if (r.checkOutTime) {
+    const [jamPulang, menitPulang] = r.checkOutTime.split(':').map(Number);
+    akhirMenit = jamPulang * 60 + menitPulang;
+  } else if (r.date === todayStr()) {
+    const now = new Date();
+    akhirMenit = now.getHours() * 60 + now.getMinutes();
+    berjalan = true;
+  } else {
+    // Hari lampau yang belum di-checkout -- upahnya Rp0 sampai HR
+    // mengoreksinya (lihat routes/payroll.js), bukan sekadar data kosong.
+    return '<span class="text-rose-500">Belum checkout</span>';
+  }
+
+  const totalMenit = Math.max(0, akhirMenit - mulaiMenit);
+  const teks = `${Math.floor(totalMenit / 60)}j ${pad2(totalMenit % 60)}m${berjalan ? ' (berjalan)' : ''}`;
+  const memenuhi = totalMenit >= JAM_KERJA_WAJIB_MENIT;
+  return memenuhi
+    ? `<span class="text-emerald-700 font-medium">${teks}</span>`
+    : `<span class="text-slate-500">${teks}</span>`;
+}
+
 /* Pilihan filter status pada Riwayat Absensi.
 
    "tidak-hadir" adalah alasan filter ini ada: menjawab "siapa saja yang tidak
@@ -544,7 +583,6 @@ function renderHistoryTable(containerEl, employees, state) {
               <th class="px-4 py-2.5 font-medium">Tanggal</th>
               <th class="px-4 py-2.5 font-medium">Karyawan</th>
               <th class="px-4 py-2.5 font-medium">Status</th>
-              <th class="px-4 py-2.5 font-medium">Tipe</th>
               <th class="px-4 py-2.5 font-medium">Jam Kerja</th>
               <th class="px-4 py-2.5 font-medium">Jam Masuk</th>
               <th class="px-4 py-2.5 font-medium">Catatan</th>
@@ -593,7 +631,7 @@ function applyHistoryStatusFilter(records, status) {
 async function renderHistoryRows(state) {
   const tbody = document.getElementById('hist-tbody');
   if (!tbody) return;
-  tbody.innerHTML = `<tr><td colspan="7" class="px-4 py-8 text-center text-slate-400">Memuat...</td></tr>`;
+  tbody.innerHTML = `<tr><td colspan="6" class="px-4 py-8 text-center text-slate-400">Memuat...</td></tr>`;
 
   let records;
   try {
@@ -602,7 +640,7 @@ async function renderHistoryRows(state) {
       month: state.month
     });
   } catch (err) {
-    tbody.innerHTML = `<tr><td colspan="7" class="px-4 py-8 text-center text-rose-500">Gagal memuat data: ${escapeHtml(err.message)}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6" class="px-4 py-8 text-center text-rose-500">Gagal memuat data: ${escapeHtml(err.message)}</td></tr>`;
     return;
   }
 
@@ -620,7 +658,7 @@ async function renderHistoryRows(state) {
     const pesan = state.status === 'all'
       ? 'Belum ada absensi yang tercatat pada bulan ini. Coba pilih bulan lain.'
       : 'Tidak ada yang berstatus itu pada bulan ini. Coba ganti filter status atau pilih bulan lain.';
-    tbody.innerHTML = `<tr><td colspan="7" class="px-4 py-8 text-center text-slate-400">${pesan}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="6" class="px-4 py-8 text-center text-slate-400">${pesan}</td></tr>`;
     return;
   }
 
@@ -629,8 +667,7 @@ async function renderHistoryRows(state) {
       <td class="px-4 py-2.5 text-slate-700">${formatTanggalIndo(r.date)}</td>
       <td class="px-4 py-2.5 text-slate-700">${escapeHtml(r.employeeName || '-')}</td>
       <td class="px-4 py-2.5"><span class="text-xs font-medium px-2.5 py-1 rounded-full border ${STATUS_BADGE_CLASS[r.status]}">${STATUS_LABEL[r.status]}</span></td>
-      <td class="px-4 py-2.5 text-slate-500">${r.attendanceType ? ATTENDANCE_TYPE_LABEL[r.attendanceType] : '-'}</td>
-      <td class="px-4 py-2.5 text-slate-500">${r.hoursWorked != null ? r.hoursWorked + ' jam' : '-'}</td>
+      <td class="px-4 py-2.5">${formatJamKerjaHistory(r)}</td>
       <td class="px-4 py-2.5 text-slate-500">${r.checkInTime || '-'}</td>
       <td class="px-4 py-2.5 text-slate-500">${escapeHtml(r.note || '-')}</td>
     </tr>
