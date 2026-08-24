@@ -627,6 +627,7 @@ function renderHistoryTable(containerEl, employees, state) {
               <th class="px-4 py-2.5 font-medium">Status</th>
               <th class="px-4 py-2.5 font-medium">Jam Kerja</th>
               <th class="px-4 py-2.5 font-medium">Jam Masuk</th>
+              <th class="px-4 py-2.5 font-medium">Jam Pulang</th>
               <th class="px-4 py-2.5 font-medium">Catatan</th>
             </tr>
           </thead>
@@ -673,7 +674,7 @@ function applyHistoryStatusFilter(records, status) {
 async function renderHistoryRows(state) {
   const tbody = document.getElementById('hist-tbody');
   if (!tbody) return;
-  tbody.innerHTML = `<tr><td colspan="6" class="px-4 py-8 text-center text-slate-400">Memuat...</td></tr>`;
+  tbody.innerHTML = `<tr><td colspan="7" class="px-4 py-8 text-center text-slate-400">Memuat...</td></tr>`;
 
   let records;
   try {
@@ -682,7 +683,7 @@ async function renderHistoryRows(state) {
       month: state.month
     });
   } catch (err) {
-    tbody.innerHTML = `<tr><td colspan="6" class="px-4 py-8 text-center text-rose-500">Gagal memuat data: ${escapeHtml(err.message)}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="7" class="px-4 py-8 text-center text-rose-500">Gagal memuat data: ${escapeHtml(err.message)}</td></tr>`;
     return;
   }
 
@@ -700,7 +701,7 @@ async function renderHistoryRows(state) {
     const pesan = state.status === 'all'
       ? 'Belum ada absensi yang tercatat pada bulan ini. Coba pilih bulan lain.'
       : 'Tidak ada yang berstatus itu pada bulan ini. Coba ganti filter status atau pilih bulan lain.';
-    tbody.innerHTML = `<tr><td colspan="6" class="px-4 py-8 text-center text-slate-400">${pesan}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="7" class="px-4 py-8 text-center text-slate-400">${pesan}</td></tr>`;
     return;
   }
 
@@ -711,6 +712,7 @@ async function renderHistoryRows(state) {
       <td class="px-4 py-2.5"><span class="text-xs font-medium px-2.5 py-1 rounded-full border ${STATUS_BADGE_CLASS[r.status]}">${STATUS_LABEL[r.status]}</span></td>
       <td class="px-4 py-2.5">${formatJamKerjaHistory(r)}</td>
       <td class="px-4 py-2.5 text-slate-500">${r.checkInTime || '-'}</td>
+      <td class="px-4 py-2.5 text-slate-500">${r.status === 'hadir' ? (r.checkOutTime || '<span class="text-slate-400">belum dicatat</span>') : '-'}</td>
       <td class="px-4 py-2.5 text-slate-500">${escapeHtml(r.note || '-')}</td>
     </tr>
   `).join('');
